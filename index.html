@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>住院/佔床名單格式化工具 (極簡安全穩定版)</title>
+    <title>住院/佔床名單格式化工具 (純 JS 最終整合穩定版)</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -92,7 +92,7 @@
 <body>
 
 <div class="container">
-    <h2>📋 住院/佔床病人清單等寬排版工具 (純 JS 安全穩定版)</h2>
+    <h2>📋 住院/佔床病人清單等寬排版工具 (純 JS 最終整合穩定版)</h2>
     
     <div id="engine-status" class="status-badge status-ready">✓ 系統本機環境已就緒 (免網路聯線)</div>
     
@@ -143,7 +143,21 @@
         "I501": "LV Failure", "I50.1": "LV Failure",
         "E7521": "Fabry disease", "E75.21": "Fabry disease",
         "I2510": "CAD", "I25.10": "CAD",
-        "I70244": "PAD w/ ulcer (L)", "I70.244": "PAD w/ ulcer (L)"
+        "I70244": "PAD w/ ulcer (L)", "I70.244": "PAD w/ ulcer (L)",
+        
+        // 🆕 最新一輪依需求補入的疾病代碼
+        "I25119": "CAD w/ angina", "I25.119": "CAD w/ angina",
+        "I4821": "Chronic persistent Af", "I48.21": "Chronic persistent Af",
+        "I200": "Unstable Angina", "I20.0": "Unstable Angina",
+        "I4892": "AFL", "I48.92": "AFL",
+        "I202": "Prinzmetal Angina", "I20.2": "Prinzmetal Angina",
+        "I71019": "Thoracic Aortic Dissection", "I71.019": "Thoracic Aortic Dissection",
+        "I743": "Lower extremity embolism", "I74.3": "Lower extremity embolism",
+        "Z95810": "AICD status", "Z95.810": "AICD status",
+        "I70202": "PAD (L)", "I70.202": "PAD (L)",
+        "I70201": "PAD (R)", "I70.201": "PAD (R)",
+        "I70261": "PAD w/ gangrene (R)", "I70.261": "PAD w/ gangrene (R)",
+        "J810": "Acute Pulmonary Edema", "J81.0": "Acute Pulmonary Edema"
     };
 
     // 🩺 醫事人員對照表
@@ -219,7 +233,6 @@
             for (let line of lines) {
                 if (!line.trim()) continue;
                 
-                // 讀取特定欄位索引，僅做單純去前後空白
                 const parts = line.split(',').map(p => p.trim());
                 if (parts.length <= 11) continue;
                 
@@ -229,10 +242,7 @@
                 const bedType = parts[8];     
                 let icdCode = parts[11] || "";    
 
-                // 🛑 移除引發災難的清洗邏輯，改用最溫和的字串包含比對法
                 let docName = docCode;
-                
-                // 跑字典模糊比對：只要對照表裡的 key 有出現在 docCode 裡，就判定成功
                 for (let key in DOCTOR_MAP) {
                     if (docCode.includes(key)) {
                         docName = DOCTOR_MAP[key];
@@ -240,7 +250,6 @@
                     }
                 }
                 
-                // 針對疾病碼也採取相同的溫和包含比對
                 let icdName = "Unknown Diagnosis";
                 for (let key in ICD_MAP) {
                     if (icdCode.includes(key)) {
@@ -260,7 +269,6 @@
                 }
                 if (!dateStr) { dateStr = rawDate.substring(0, 5); }
 
-                // 跨週分隔線
                 if (lastWeekNum !== null && currentWeekNum !== null && currentWeekNum !== lastWeekNum) {
                     outputLines.push("\n" + "=".repeat(24) + " 🗓️ 跨 週 排 程 分 隔 線 " + "=".repeat(24) + "\n");
                 }
