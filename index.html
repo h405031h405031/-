@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>住院/佔床名單格式化工具 (最終校正穩定版)</title>
+    <title>住院/佔床名單格式化工具 (極簡安全穩定版)</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -92,7 +92,7 @@
 <body>
 
 <div class="container">
-    <h2>📋 住院/佔床病人清單等寬排版工具 (純 JS 最終校正版)</h2>
+    <h2>📋 住院/佔床病人清單等寬排版工具 (純 JS 安全穩定版)</h2>
     
     <div id="engine-status" class="status-badge status-ready">✓ 系統本機環境已就緒 (免網路聯線)</div>
     
@@ -146,7 +146,7 @@
         "I70244": "PAD w/ ulcer (L)", "I70.244": "PAD w/ ulcer (L)"
     };
 
-    // 🩺 醫事人員對照表 (精準校正版)
+    // 🩺 醫事人員對照表
     const DOCTOR_MAP = {
         "0034": "0034郭啟泰", "0334": "0334何建德", "0424": "0424呂侑穎", "0510": "0510陳偉踐",
         "0549": "0549王俊傑", "0799": "0799黃昱彰", "0985": "0985徐子哲", "1059": "1059張捷宇",
@@ -219,7 +219,7 @@
             for (let line of lines) {
                 if (!line.trim()) continue;
                 
-                // 讀取特定欄位索引
+                // 讀取特定欄位索引，僅做單純去前後空白
                 const parts = line.split(',').map(p => p.trim());
                 if (parts.length <= 11) continue;
                 
@@ -229,9 +229,25 @@
                 const bedType = parts[8];     
                 let icdCode = parts[11] || "";    
 
-                // 精準移除看不見的控制字元與前後雜訊，不傷及 0-9 數字
-                docCode = docCode.replace(/[^a-zA-Z0-9]/g, '');
-                icdCode = icdCode.replace(/[^a-zA-Z0-9\.]/g, '');
+                // 🛑 移除引發災難的清洗邏輯，改用最溫和的字串包含比對法
+                let docName = docCode;
+                
+                // 跑字典模糊比對：只要對照表裡的 key 有出現在 docCode 裡，就判定成功
+                for (let key in DOCTOR_MAP) {
+                    if (docCode.includes(key)) {
+                        docName = DOCTOR_MAP[key];
+                        break;
+                    }
+                }
+                
+                // 針對疾病碼也採取相同的溫和包含比對
+                let icdName = "Unknown Diagnosis";
+                for (let key in ICD_MAP) {
+                    if (icdCode.includes(key)) {
+                        icdName = ICD_MAP[key];
+                        break;
+                    }
+                }
 
                 let dateStr = "";
                 let currentWeekNum = null;
@@ -249,9 +265,6 @@
                     outputLines.push("\n" + "=".repeat(24) + " 🗓️ 跨 週 排 程 分 隔 線 " + "=".repeat(24) + "\n");
                 }
                 if (currentWeekNum !== null) { lastWeekNum = currentWeekNum; }
-
-                const docName = DOCTOR_MAP[docCode] || docCode;
-                const icdName = ICD_MAP[icdCode] || "Unknown Diagnosis";
                 
                 const colDate = padText(dateStr, 8);
                 const colChart = padText(chartNo, 12);
