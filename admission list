@@ -2,54 +2,102 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>臨床資料格式轉換工具 (全面對照優化版)</title>
-    <script src="https://cdn.jsdelivr.net/npm/brython@3.12.0/brython.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/brython@3.12.0/brython_stdlib.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>臨床預住院清單轉檔工具</title>
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/brython@3.12.4/brython.min.js"></script>
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/brython@3.12.4/brython_modules.js"></script>
     
     <style>
-        body { font-family: 'Courier New', Courier, monospace, Arial, sans-serif; padding: 20px; max-width: 950px; margin: 0 auto; background-color: #f5f5f5; }
-        .container { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .btn { background-color: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; margin-top: 10px; font-weight: bold; }
-        .btn:disabled { background-color: #cccccc; cursor: not-allowed; }
-        textarea { width: 100%; height: 400px; margin-top: 15px; font-family: monospace; font-size: 14px; white-space: pre; overflow-x: auto; line-height: 1.4; }
-        .status { margin-top: 10px; color: #28a745; font-weight: bold; }
-        .info-box { background-color: #e9ecef; padding: 15px; border-radius: 4px; margin-bottom: 20px; font-size: 0.9em; line-height: 1.5; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f7fa;
+            color: #333;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        h2 { color: #1a365d; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; }
+        .privacy-notice {
+            background-color: #ebf8ff;
+            border-left: 4px solid #3182ce;
+            color: #2b6cb0;
+            padding: 10px 15px;
+            margin-bottom: 20px;
+            font-size: 0.9em;
+            border-radius: 4px;
+        }
+        .control-panel {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+        .btn {
+            background-color: #3182ce;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 1em;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+        .btn:hover { background-color: #2b6cb0; }
+        .btn:disabled { background-color: #cbd5e0; cursor: not-allowed; }
+        #previewArea {
+            width: 100%;
+            height: 450px;
+            font-family: "Courier New", Courier, monospace;
+            font-size: 14px;
+            background-color: #1e1e1e;
+            color: #f4f4f4;
+            padding: 15px;
+            border-radius: 6px;
+            box-sizing: border-box;
+            resize: vertical;
+        }
+        .status-msg { font-weight: bold; margin-left: 10px; }
+        .status-success { color: #38a169; }
+        .status-error { color: #e53e3e; }
     </style>
 </head>
 
 <body onload="brython()">
 
 <div class="container">
-    <h2>臨床資料格式轉換工具 (醫師/ICD自動對照)</h2>
-    <div class="info-box">
-        <strong>🔒 隱私安全提示：</strong> 此網頁純粹在您的瀏覽器本機執行 Python 邏輯，任何上傳的醫療資料皆<strong>不會</strong>傳輸到任何伺服器。<br>
-        <strong>📅 功能說明：</strong> 依據 <code>coding data</code> 設定，自動轉換 ICD 碼與醫師名稱，並依<strong>「週（週一至週日）」</strong>自動繪製週分隔線。
+    <h2>臨床資料轉檔工具 (預住院清單/交班單驗證)</h2>
+    <div class="privacy-notice">
+        🔒 <strong>隱私安全宣告：</strong>本工具完全於您的瀏覽器本機端 (Client-side) 執行運算，絕不傳輸任何病人隱私資料至外部網路或伺服器，請安心使用。
     </div>
-    
-    <input type="file" id="fileInput" accept=".txt"><br><br>
-    
-    <button id="convertBtn" class="btn" disabled>開始轉換資料</button>
-    <button id="downloadBtn" class="btn" style="background-color: #28a745;" disabled>下載新 .txt 檔案</button>
-    
-    <div id="statusMsg" class="status" style="color: #007bff;">請先點擊「選擇檔案」上傳原始臨床 .txt 檔。</div>
-    
-    <h3>轉換結果預覽：</h3>
-    <textarea id="outputArea" readonly placeholder="轉換後的文字將顯示於此..."></textarea>
+
+    <div class="control-panel">
+        <input type="file" id="fileInput" accept=".txt,.csv" />
+        <button class="btn" id="downloadBtn" disabled>下載轉檔後的 .txt</button>
+        <span id="statusMessage" class="status-msg"></span>
+    </div>
+
+    <h3>轉換預覽框</h3>
+    <textarea id="previewArea" readonly placeholder="請上傳原始預住院清單檔案..."></textarea>
 </div>
 
 <script type="text/python">
+import re
 from browser import document, window, bind
 from datetime import datetime
 
-# 預先初始化全局變數，防止未讀取檔案時報錯
-processed_text = ""
-raw_text = ""
+# 1. 醫事人員對照字典
+DOCTOR_MAP = {
+    "2867": "2867周宗川"
+}
 
-# ==========================================
-# 📋 【從 Excel coding data 與原始檔案整合的完整對照表】
-# ==========================================
-# 1. ICD-10 疾病代碼對照
-DIAGNOSIS_MAP = {
+# 2. ICD-10 診斷碼對照字典
+ICD_MAP = {
     "I480": "Paroxysmal Af",
     "I4819": "Persistent Af",
     "I471": "SVT",
@@ -57,7 +105,7 @@ DIAGNOSIS_MAP = {
     "I442": "CAVB",
     "I483": "AFL",
     "I470": "VT",
-    "I4891": "Af", 
+    "I4891": "Af",
     "I4811": "Chronic Af",
     "I209": "CAD/Angina",
     "R002": "Abnormal heart-beat",
@@ -69,122 +117,156 @@ DIAGNOSIS_MAP = {
     "I340": "MR"
 }
 
-# 2. 醫師代碼對照
-DOCTOR_MAP = {
-    "2867": "2867周宗川",
-    "1449": "1449",
-    "2341": "2341",
-    "5240": "5240",
-    "3656": "3656",
-    "1816": "1816",
-    "7172": "7172",
-    "3436": "3436",
-    "3015": "3015"
-}
+# 全域變數，用於儲存準備下載的文字內容
+final_output_text = ""
 
-def get_week_number(date_str):
-    """計算該日期屬於哪一年的第幾週（以週一為一週的開始）"""
-    try:
-        pure_date = date_str.split()[0]
-        dt = datetime.strptime(pure_date, "%Y/%m/%d")
-        return dt.isocalendar()[0], dt.isocalendar()[1]
-    except Exception:
-        return None
+def parse_csv_line(line):
+    """
+    強健的 CSV 行解析：利用正規表示法處理可能包含雙引號或特殊空白的欄位，防止單純 split(',') 錯位。
+    """
+    if not line.strip():
+        return []
+    # 匹配普通欄位或雙引號包裹的欄位
+    pattern = re.compile(r'([^,"]*|"[^"\\]*(?:\\.[^"\\]*)*")(?:,|$)')
+    matches = pattern.findall(line)
+    # 去除最後一個因逗號結尾產生的空匹配
+    if matches and matches[-1] == '':
+        matches.pop()
+    # 去除欄位首尾的雙引號與空白
+    return [m.strip().strip('"').strip() for m in matches]
+
+def process_file_content(raw_text):
+    global final_output_text
+    
+    # 統一換行符並切行
+    lines = raw_text.replace('\r\n', '\n').replace('\r', '\n').split('\n')
+    
+    # 欄位完美對齊之寬度設定 (根據標題字串長度與資料特性預留)
+    col_widths = {"date": 10, "id": 12, "doc": 14, "bed": 8, "diag": 25}
+    
+    # 建立標題列
+    header = (
+        "預住院日".ljust(col_widths["date"]) +
+        "病歷號".ljust(col_widths["id"]) +
+        "醫師".ljust(col_widths["doc"]) +
+        "床等".ljust(col_widths["bed"]) +
+        "診斷"
+    )
+    
+    output_lines = [header]
+    current_last_week = None  # 用於追蹤 ISO 週別切換
+    valid_row_count = 0
+
+    for line in lines:
+        parts = parse_csv_line(line)
+        # 防錯：確保欄位長度至少達到需要的第 12 欄 (Index 11)
+        if len(parts) < 12:
+            continue
+            
+        # 提取核心欄位
+        raw_date = parts[2]
+        patient_id = parts[4]
+        doc_code = parts[7]
+        bed_info = parts[8]
+        icd_code = parts[11]
+        
+        # 跳過 CSV 的標題列（如果原始檔案內含中文標題）
+        if "病歷號" in patient_id or "醫師" in doc_code:
+            continue
+
+        # --- 1. 日期簡化與週別計算 ---
+        formatted_date = ""
+        iso_week = None
+        try:
+            # 嘗試解析醫院標準格式 2026/06/27 17:09:22
+            dt = datetime.strptime(raw_date.split()[0], "%Y/%m/%d")
+            formatted_date = dt.strftime("%m/%d")
+            iso_week = dt.isocalendar()[1]  # 取得 ISO 週別數字
+        except Exception:
+            # 若格式有變異，退化為字串截取防錯
+            formatted_date = raw_date[:10] if len(raw_date) >= 10 else raw_date
+        
+        # --- 2. 跨週自動插入分隔線 ---
+        if iso_week is not None:
+            if current_last_week is not None and iso_week != current_last_week:
+                output_lines.append("-" * 70)
+            current_last_week = iso_week
+
+        # --- 3. 醫師代碼對照 ---
+        resolved_doc = DOCTOR_MAP.get(doc_code, doc_code)
+
+        # --- 4. 診斷碼對照 ---
+        resolved_diag = ICD_MAP.get(icd_code, icd_code)
+
+        # --- 5. 欄位對齊組裝 ---
+        # 運用左對齊(ljust)確保不論英中文長度，皆不會導致後方欄位錯位
+        row_str = (
+            formatted_date.ljust(col_widths["date"]) +
+            patient_id.ljust(col_widths["id"]) +
+            resolved_doc.ljust(col_widths["doc"]) +
+            bed_info.ljust(col_widths["bed"]) +
+            resolved_diag
+        )
+        output_lines.append(row_str)
+        valid_row_count += 1
+
+    if valid_row_count == 0:
+        raise ValueError("檔案內無符合欄位格式的有效病人資料，請確認是否為正確的醫院匯出檔。")
+
+    # 合併為最終文字
+    final_output_text = "\n".join(output_lines)
+    return final_output_text, valid_row_count
 
 @bind(document["fileInput"], "change")
-def file_selected(evt):
-    global raw_text
-    file = evt.target.files[0]
-    if file:
-        reader = window.FileReader.new()
-        def on_load_end(e):
-            global raw_text
-            raw_text = e.target.result
-            document["convertBtn"].disabled = False
-            document["statusMsg"].style.color = "#28a745"
-            document["statusMsg"].text = f"成功載入檔案：{file.name}，請點擊「開始轉換資料」。"
-            
-        reader.bind("loadend", on_load_end)
-        reader.readAsText(file, "UTF-8")
-
-@bind(document["convertBtn"], "click")
-def convert_data(evt):
-    global processed_text, raw_text
-    
-    if not raw_text:
-        document["statusMsg"].style.color = "red"
-        document["statusMsg"].text = "發生錯誤：尚未偵測到檔案內容，請重新選擇檔案。"
+def handle_file_select(evt):
+    file_list = evt.target.files
+    if not file_list:
         return
         
-    document["statusMsg"].style.color = "#007bff"
-    document["statusMsg"].text = "正在進行週分隔與雙重對照優化..."
+    file = file_list[0]
+    status_el = document["statusMessage"]
+    preview_el = document["previewArea"]
+    download_btn = document["downloadBtn"]
     
-    try:
-        lines = raw_text.split("\n")
-        output_lines = []
-        
-        # 寫入格式化後的欄位標題
-        output_lines.append("預住院日\t病歷號\t\t醫師\t\t床等\t\t診斷")
-        
-        last_week = None
-        
-        for line in lines:
-            line = line.strip()
-            if not line or "院區,來源" in line or ".strip()      
-            chart_no = parts[4].strip()      
-            doc_id = parts[7].strip()        
-            bed_type = parts[8].strip()      
-            icd_code = parts[11].strip()     
+    status_el.text = "讀取檔案中..."
+    status_el.className = "status-msg"
+    
+    # 使用 JavaScript 的 FileReader 讀取本機端檔案
+    reader = window.FileReader.new()
+    
+    def on_load_complete(e):
+        try:
+            raw_content = reader.result
+            processed_text, count = process_file_content(raw_content)
             
-            # 1. 簡化日期 (YYYY/MM/DD -> MM/DD)
-            try:
-                pure_date = raw_date.split()[0]
-                date_obj = datetime.strptime(pure_date, "%Y/%m/%d")
-                formatted_date = date_obj.strftime("%m/%d")
-            except:
-                formatted_date = raw_date
-                
-            # 2. 週分隔線判定
-            current_week = get_week_number(raw_date)
-            if last_week is not None and current_week != last_week:
-                output_lines.append("\n----------------------------------------------------------------------\n")
-            last_week = current_week
+            # 安全填入預覽框（使用 .text 屬性而非 innerHTML，確保程式碼標籤不被解析）
+            preview_el.text = processed_text
             
-            # 3. 醫師代碼轉換
-            doc_display = DOCTOR_MAP.get(doc_id, doc_id)
-            if len(doc_display) < 8:
-                doc_display += "\t"
+            status_el.text = f"成功轉換 {count} 筆病人資料！"
+            status_el.className = "status-msg status-success"
+            download_btn.disabled = False
+        except Exception as ex:
+            preview_el.text = ""
+            status_el.text = f"轉換失敗：{str(ex)}"
+            status_el.className = "status-msg status-error"
+            download_btn.disabled = True
             
-            # 4. 診斷碼轉換
-            dx_display = DIAGNOSIS_MAP.get(icd_code, icd_code)
-            if not dx_display:
-                dx_display = icd_code
-                
-            # 5. 組合輸出
-            formatted_line = f"{formatted_date}\t{chart_no}\t\t{doc_display}\t{bed_type}\t\t{dx_display}"
-            output_lines.append(formatted_line)
-            
-        processed_text = "\n".join(output_lines)
-        
-        document["outputArea"].value = processed_text
-        document["downloadBtn"].disabled = False
-        document["statusMsg"].style.color = "#28a745"
-        document["statusMsg"].text = "轉換成功！已完成全自動校對與排版。"
-        
-    except Exception as e:
-        document["statusMsg"].style.color = "red"
-        document["statusMsg"].text = f"發生錯誤: {str(e)}"
+    reader.bind("load", on_load_complete)
+    # 預設以 UTF-8 讀取。若醫院舊系統可能為 Big5，可改為 'big5'
+    reader.readAsText(file, 'utf-8')
 
 @bind(document["downloadBtn"], "click")
-def download_file(evt):
-    global processed_text
-    blob = window.Blob.new([processed_text], {"type": "text/plain;charset=utf-8"})
-    url = window.URL.createObjectURL(blob)
-    link = document.createElement("a")
-    link.href = url
-    link.download = "clinical_data_final.txt"
-    link.click()
-    window.URL.revokeObjectURL(url)
+def trigger_download(evt):
+    global final_output_text
+    if not final_output_text:
+        return
+        
+    # 利用瀏覽器 Blob 機制動產出本機端下載
+    blob = window.Blob.new([final_output_text], {"type": "text/plain;charset=utf-8"})
+    a = document.createElement("a")
+    a.href = window.URL.createObjectURL(blob)
+    a.download = f"格式化交班清單_{datetime.now().strftime('%m%d_%H%M')}.txt"
+    a.click()
 </script>
 
 </body>
