@@ -3,11 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>住院/佔床名單格式化工具</title>
-    
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/brython/3.12.0/brython.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/brython/3.12.0/brython_stdlib.min.js"></script>
-
+    <title>住院/佔床名單格式化工具 (JS 穩定版)</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -38,7 +34,6 @@
             font-weight: bold;
             margin-bottom: 20px;
         }
-        .status-init { background-color: #ffe699; color: #7d5a00; }
         .status-ready { background-color: #d4edda; color: #155724; }
         
         .control-group {
@@ -94,16 +89,16 @@
         }
     </style>
 </head>
-<body onload="brython(1)">
+<body>
 
 <div class="container">
-    <h2>📋 住院/佔床病人清單等寬排版工具</h2>
+    <h2>📋 住院/佔床病人清單等寬排版工具 (純 JS 院內穩定版)</h2>
     
-    <div id="engine-status" class="status-badge status-init">系統引擎初始化中，請稍候...</div>
+    <div id="engine-status" class="status-badge status-ready">✓ 系統本機環境已就緒 (免網路聯線)</div>
     
     <div class="control-group">
         <label for="fileInput" class="file-label">選擇原始清單 (.txt/.csv)</label>
-        <input type="file" id="fileInput" accept=".txt,.csv" disabled>
+        <input type="file" id="fileInput" accept=".txt,.csv">
         <span id="file-name-display">尚未選擇檔案</span>
     </div>
     
@@ -118,15 +113,81 @@
 </div>
 
 <script>
-    let rawFileContent = "";
-
-    window.onPythonReady = function() {
-        const statusBadge = document.getElementById("engine-status");
-        statusBadge.innerText = "✓ 系統引擎已就緒";
-        statusBadge.className = "status-badge status-ready";
-        document.getElementById("fileInput").disabled = false;
+    // 🧬 疾病代碼對照表
+    const ICD_MAP = {
+        "I480": "Paroxysmal Af", "I48.0": "Paroxysmal Af",
+        "I4819": "Persistent Af", "I48.19": "Persistent Af",
+        "I471": "SVT", "I47.1": "SVT",
+        "I495": "SSS", "I49.5": "SSS",
+        "I442": "CAVB", "I44.2": "CAVB",
+        "I483": "AFL", "I48.3": "AFL",
+        "I470": "VT", "I47.0": "VT",
+        "I4891": "Af", "I48.91": "Af",
+        "I4811": "Chronic Af", "I48.11": "Chronic Af",
+        "I209": "CAD/Angina", "I20.9": "CAD/Angina",
+        "R002": "Abnormal heart-beat", "R00.2": "Abnormal heart-beat",
+        "I509": "Heart Failure", "I50.9": "Heart Failure",
+        "R079": "Chest Pain", "R07.9": "Chest Pain",
+        "I441": "2nd-degree AVB", "I44.1": "2nd-degree AVB",
+        "Z950": "Pacemaker status", "Z95.0": "Pacemaker status",
+        "I498": "Other arrhythmia", "I49.8": "Other arrhythmia",
+        "I340": "MR", "I34.0": "MR"
     };
 
+    // 🩺 醫事人員對照表 (格式：代碼+姓名)
+    const DOCTOR_MAP = {
+        "Q427": "Q427許承越", "Q562": "Q562黃仕鴻", "Q307": "Q307唐嘉駿", "Q255": "Q255楊熙恆",
+        "Q237": "Q237侯冠榕", "Q213": "Q213許皓森", "Q062": "Q062張昱政", "Q368": "Q368蔡宗翰",
+        "2651": "2651賈晉原", "2545": "2545陳靖蓉", "2486": "2486陳緯倫", "2694": "2694黃柏棣",
+        "2341": "2341謝舒筠", "1992": "1992邱凱斌", "1605": "1605謝侑叡", "1512": "1512林莞芹",
+        "1229": "1229黃逸群", "1305": "1305鄭郁雯", "1199": "1199曾子慈", "0985": "0985徐子哲",
+        "1059": "1059張捷宇", "0424": "0424呂侑穎", "0799": "0799黃昱彰", "8395": "8395顏琨麒",
+        "7977": "7977李廣祚", "7172": "7172沃宏達", "7123": "7123詹益欣", "5278": "5278巫龍昇",
+        "5240": "5240張伯丞", "5009": "5009吳家棟", "3436": "3436葉勇信", "3015": "3015王俊力",
+        "2867": "2867周宗川", "2633": "2633賀萬靖", "2233": "2233許隆安", "2195": "2195洪國竣",
+        "2089": "2089褚柏顯", "1816": "1816謝宜璋", "1760": "1760柯毓賢", "1449": "1449溫明賢"
+    };
+
+    let rawFileContent = "";
+
+    // 計算中英文顯示長度 (中文字算 2，英數算 1)
+    function getDisplayLength(str) {
+        let len = 0;
+        for (let i = 0; i < str.length; i++) {
+            if (str.charCodeAt(i) > 127) {
+                len += 2;
+            } else {
+                len += 1;
+            }
+        }
+        return len;
+    }
+
+    // 依長度補齊空格
+    function padText(str, targetLen) {
+        let currentLen = getDisplayLength(str);
+        if (currentLen >= targetLen) return str;
+        return str + " ".repeat(targetLen - currentLen);
+    }
+
+    // 取得日期的 ISO 週別 (對應 Python 的 dt.isocalendar()[1])
+    function getISOWeek(dateString) {
+        // 解析格式 "2026/06/27 17:09:22"
+        const normalized = dateString.replace(/\//g, '-');
+        const target = new Date(normalized);
+        if (isNaN(target.getTime())) return null;
+        
+        const dayNr = (target.getDay() + 6) % 7;
+        target.setDate(target.getDate() - dayNr + 3);
+        const firstThursday = target.valueOf();
+        target.setMonth(0, 1);
+        if (target.getDay() !== 4) {
+            target.setMonth(0, 1 + ((4 - target.getDay()) + 7) % 7);
+        }
+        return 1 + Math.ceil((firstThursday - target) / 604800000);
+    }
+
+    // 監聽選取檔案
     document.getElementById("fileInput").addEventListener("change", function(e) {
         const file = e.target.files[0];
         if (!file) return;
@@ -138,152 +199,97 @@
             rawFileContent = evt.target.result;
             document.getElementById("transformBtn").disabled = false;
         };
-        reader.readAsText(file, "UTF-8");
+        reader.readAsText(file, "UTF-8"); // 視醫院系統導出編碼可調整為 "BIG5"
     });
 
+    // 點擊轉換按鈕
     document.getElementById("transformBtn").addEventListener("click", function() {
         if (!rawFileContent) return;
         
-        if (typeof window.pythonRunTransform === "function") {
-            window.pythonRunTransform(rawFileContent);
-        } else {
-            alert("錯誤：Python 核心尚未綁定成功，請重新整理網頁。");
+        try {
+            const lines = rawFileContent.split(/\r?\n/);
+            const outputLines = [];
+            
+            // 建立標頭
+            const header = `${padText('預住日', 8)}${padText('病歷號', 12)}${padText('主治醫師', 16)}${padText('床等', 8)}主診斷碼 / 疾病名稱`;
+            outputLines.push(header);
+            outputLines.push("-".repeat(80));
+            
+            let lastWeekNum = null;
+            
+            for (let line of lines) {
+                if (!line.trim()) continue;
+                
+                const parts = line.split(',').map(p => p.trim());
+                if (parts.length <= 11) continue;
+                
+                const rawDate = parts[2];     // parts[2]
+                const chartNo = parts[4];     // parts[4]
+                const docCode = parts[7];     // parts[7]
+                const bedType = parts[8];     // parts[8]
+                const icdCode = parts[11] || "";    // parts[11]
+
+                // 1. 日期處理與跨週判斷
+                let dateStr = "";
+                let currentWeekNum = null;
+                
+                if (rawDate.includes("/")) {
+                    const match = rawDate.match(/(\d{4})\/(\d{2})\/(\d{2})/);
+                    if (match) {
+                        dateStr = `${match[2]}/${match[3]}`; // MM/DD
+                        currentWeekNum = getISOWeek(rawDate);
+                    }
+                }
+                
+                if (!dateStr) {
+                    dateStr = rawDate.substring(0, 5);
+                }
+
+                // 跨週觸發分隔線
+                if (lastWeekNum !== null && currentWeekNum !== null && currentWeekNum !== lastWeekNum) {
+                    outputLines.push("\n" + "=".repeat(24) + " 🗓️ 跨 週 排 程 分 隔 線 " + "=".repeat(24) + "\n");
+                }
+                
+                if (currentWeekNum !== null) {
+                    lastWeekNum = currentWeekNum;
+                }
+
+                // 2. 轉換對照字典
+                const docName = DOCTOR_MAP[docCode] || docCode;
+                const icdName = ICD_MAP[icdCode] || "Unknown Diagnosis";
+                
+                // 3. 欄位等寬拼接
+                const colDate = padText(dateStr, 8);
+                const colChart = padText(chartNo, 12);
+                const colDoc = padText(docName, 16);
+                const colBed = padText(bedType, 8);
+                const colIcd = `${icdCode} (${icdName})`;
+                
+                outputLines.push(`${colDate}${colChart}${colDoc}${colBed}${colIcd}`);
+            }
+            
+            const finalResult = outputLines.join("\n");
+            
+            // 4. 更新前端網頁預覽
+            const previewLines = finalResult.split("\n").slice(0, 15).join("\n");
+            document.getElementById("previewBox").innerText = previewLines + "\n\n... (其餘部分已成功導出至下載檔案) ...";
+            document.getElementById("preview-section").style.display = "block";
+            
+            // 5. 自動觸發全新 .txt 下載
+            const blob = new Blob([finalResult], { type: "text/plain;charset=utf-8" });
+            const link = document.createElement("a");
+            
+            const now = new Date();
+            const dateStamp = `${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}`;
+            
+            link.href = URL.createObjectURL(blob);
+            link.download = `formatted_patients_${dateStamp}.txt`;
+            link.click();
+            
+        } catch (err) {
+            alert("處理檔案時發生錯誤：" + err.message);
         }
     });
-</script>
-
-<script type="text/python">
-import window
-from datetime import datetime
-
-# 🧬 疾病代碼對照表
-ICD_MAP = {
-    "I480": "Paroxysmal Af", "I48.0": "Paroxysmal Af",
-    "I4819": "Persistent Af", "I48.19": "Persistent Af",
-    "I471": "SVT", "I47.1": "SVT",
-    "I495": "SSS", "I49.5": "SSS",
-    "I442": "CAVB", "I44.2": "CAVB",
-    "I483": "AFL", "I48.3": "AFL",
-    "I470": "VT", "I47.0": "VT",
-    "I4891": "Af", "I48.91": "Af",
-    "I4811": "Chronic Af", "I48.11": "Chronic Af",
-    "I209": "CAD/Angina", "I20.9": "CAD/Angina",
-    "R002": "Abnormal heart-beat", "R00.2": "Abnormal heart-beat",
-    "I509": "Heart Failure", "I50.9": "Heart Failure",
-    "R079": "Chest Pain", "R07.9": "Chest Pain",
-    "I441": "2nd-degree AVB", "I44.1": "2nd-degree AVB",
-    "Z950": "Pacemaker status", "Z95.0": "Pacemaker status",
-    "I498": "Other arrhythmia", "I49.8": "Other arrhythmia",
-    "I340": "MR", "I34.0": "MR"
-}
-
-# 🩺 醫事人員對照表 (格式已全面修正為：代碼+姓名)
-DOCTOR_MAP = {
-    "Q427": "Q427許承越", "Q562": "Q562黃仕鴻", "Q307": "Q307唐嘉駿", "Q255": "Q255楊熙恆",
-    "Q237": "Q237侯冠榕", "Q213": "Q213許皓森", "Q062": "Q062張昱政", "Q368": "Q368蔡宗翰",
-    "2651": "2651賈晉原", "2545": "2545陳靖蓉", "2486": "2486陳緯倫", "2694": "2694黃柏棣",
-    "2341": "2341謝舒筠", "1992": "1992邱凱斌", "1605": "1605謝侑叡", "1512": "1512林莞芹",
-    "1229": "1229黃逸群", "1305": "1305鄭郁雯", "1199": "1199曾子慈", "0985": "0985徐子哲",
-    "1059": "1059張捷宇", "0424": "0424呂侑穎", "0799": "0799黃昱彰", "8395": "8395顏琨麒",
-    "7977": "7977李廣祚", "7172": "7172沃宏達", "7123": "7123詹益欣", "5278": "5278巫龍昇",
-    "5240": "5240張伯丞", "5009": "5009吳家棟", "3436": "3436葉勇信", "3015": "3015王俊力",
-    "2867": "2867周宗川", "2633": "2633賀萬靖", "2233": "2233許隆安", "2195": "2195洪國竣",
-    "2089": "2089褚柏顯", "1816": "1816謝宜璋", "1760": "1760柯毓賢", "1449": "1449溫明賢"
-}
-
-def get_east_asian_width_length(text):
-    """計算中英文混合實際顯示寬度"""
-    length = 0
-    for char in text:
-        if ord(char) > 127:
-            length += 2
-        else:
-            length += 1
-    return length
-
-def pad_text(text, target_len):
-    """依實際顯示長度補空格"""
-    current_len = get_east_asian_width_length(text)
-    if current_len >= target_len:
-        return text
-    return text + " " * (target_len - current_len)
-
-def process_file_content(raw_text):
-    lines = raw_text.splitlines()
-    output_lines = []
-    
-    # 建立表頭
-    header = f"{pad_text('預住日', 8)}{pad_text('病歷號', 12)}{pad_text('主治醫師', 16)}{pad_text('床等', 8)}主診斷碼 / 疾病名稱"
-    output_lines.append(header)
-    output_lines.append("-" * 80)
-    
-    last_week_num = None
-    
-    for line in lines:
-        if not line.strip():
-            continue
-            
-        parts = [p.strip() for p in line.split(',')]
-        if len(parts) <= 11:
-            continue
-            
-        raw_date = parts[2]     # 預住日
-        chart_no = parts[4]     # 病歷號
-        doc_code = parts[7]     # 醫師代碼
-        bed_type = parts[8]     # 床等
-        icd_code = parts[11]    # 診斷碼
-
-        # 1. 日期格式簡化與跨週判定
-        date_str = ""
-        try:
-            dt = datetime.strptime(raw_date, "%Y/%m/%d %H:%M:%S")
-            date_str = f"{dt.month:02d}/{dt.day:02d}"
-            
-            current_week_num = dt.isocalendar()[1]
-            if last_week_num is not None and current_week_num != last_week_num:
-                output_lines.append("\n" + "="*24 + " 🗓️ 跨 週 排 程 分 隔 線 " + "="*24 + "\n")
-            
-            last_week_num = current_week_num
-        except Exception:
-            date_str = raw_date[:5] if len(raw_date) >= 5 else raw_date
-
-        # 2. 轉換對照字典
-        doc_name = DOCTOR_MAP.get(doc_code, doc_code)
-        icd_name = ICD_MAP.get(icd_code, "Unknown Diagnosis")
-        
-        # 3. 欄位等寬排列 (主治醫師寬度加寬至 16)
-        col_date = pad_text(date_str, 8)
-        col_chart = pad_text(chart_no, 12)
-        col_doc = pad_text(doc_name, 16)
-        col_bed = pad_text(bed_type, 8)
-        col_icd = f"{icd_code} ({icd_name})"
-        
-        combined_line = f"{col_date}{col_chart}{col_doc}{col_bed}{col_icd}"
-        output_lines.append(combined_line)
-        
-    return "\n".join(output_lines)
-
-def python_run_transform(raw_text):
-    try:
-        final_result = process_file_content(raw_text)
-        
-        # 預覽前 15 行
-        preview_lines = final_result.splitlines()[:15]
-        window.document.getElementById("previewBox").innerText = "\n".join(preview_lines) + "\n\n... (其餘部分已成功導出至下載檔案) ..."
-        window.document.getElementById("preview-section").style.display = "block"
-        
-        # 自動下載全新排版後的 .txt
-        blob = window.Blob.new([final_result], {"type": "text/plain;charset=utf-8"})
-        link = window.document.createElement("a")
-        link.href = window.URL.createObjectURL(blob)
-        link.download = f"formatted_patients_{datetime.now().strftime('%m%d_%H%M')}.txt"
-        link.click()
-        
-    except Exception as e:
-        window.alert(f"處理檔案時發生錯誤：{str(e)}")
-
-window.pythonRunTransform = python_run_transform
-window.onPythonReady()
 </script>
 
 </body>
