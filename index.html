@@ -39,7 +39,6 @@
             align-items: center;
             flex-wrap: wrap;
         }
-        /* 按鈕樣式 */
         .btn {
             color: white;
             border: none;
@@ -50,22 +49,18 @@
             transition: background 0.2s;
             font-weight: bold;
         }
-        /* 綠色執行按鈕 */
         #runBtn { background-color: #38a169; }
         #runBtn:hover:not(:disabled) { background-color: #2f855a; }
         
-        /* 藍色下載按鈕 */
         #downloadBtn { background-color: #3182ce; }
         #downloadBtn:hover:not(:disabled) { background-color: #2b6cb0; }
         
-        /* 禁用狀態強制變灰 */
         .btn:disabled { 
             background-color: #cbd5e0 !important; 
             color: #718096 !important;
             cursor: not-allowed !important; 
         }
         
-        /* 進度條樣式 */
         .progress-container {
             width: 100%;
             background-color: #e2e8f0;
@@ -136,7 +131,6 @@
     const progressContainer = document.getElementById('progressContainer');
     const progressBar = document.getElementById('progressBar');
 
-    // 當使用者「選擇檔案」時，100% 用原生的 JS 點亮綠色執行按鈕
     fileInput.addEventListener('change', function() {
         progressContainer.style.display = "none";
         progressBar.style.width = "0%";
@@ -144,7 +138,7 @@
         previewArea.value = "";
 
         if (fileInput.files.length > 0) {
-            runBtn.removeAttribute('disabled'); // 點亮綠色按鈕
+            runBtn.removeAttribute('disabled');
             downloadBtn.setAttribute('disabled', 'disabled');
             statusMessage.textContent = `已選取：${fileInput.files[0].name}，請點擊轉檔。`;
             statusMessage.className = "status-msg status-info";
@@ -153,7 +147,6 @@
         }
     });
 
-    // 觸發自定義的 Python 轉檔事件
     function triggerPythonRun() {
         const event = new CustomEvent('startTransform');
         window.dispatchEvent(event);
@@ -165,15 +158,51 @@ import re
 from browser import document, window, bind, timer
 from datetime import datetime
 
-DOCTOR_MAP = { "2867": "2867周宗川" }
+# 1. 醫事人員對照字典
+DOCTOR_MAP = {
+    "2867": "2867周宗川", "1449": "1449林茂欣", "2341": "2341高憲立",
+    "5240": "5240李任光", "3656": "3656黃瑞仁", "1816": "1816王宗道",
+    "7172": "7172賀立婷", "3436": "3436劉言言", "3015": "3015劉耕豪",
+    "7023": "7023葉志凡", "5035": "5035林亮宇", "4850": "4850游治節",
+    "3505": "3505王居萬", "2213": "2213林彥宏", "5686": "5686莊志明"
+}
 
+# 2. 疾病代碼對照字典 (已完整讀取並補齊所有欄位)
 ICD_MAP = {
-    "I480": "Paroxysmal Af", "I4819": "Persistent Af", "I471": "SVT",
-    "I495": "SSS", "I442": "CAVB", "I483": "AFL", "I470": "VT",
-    "I4891": "Af", "I4811": "Chronic Af", "I209": "CAD/Angina",
-    "R002": "Abnormal heart-beat", "I509": "Heart Failure", "R079": "Chest Pain",
-    "I441": "2nd-degree AVB", "Z950": "Pacemaker status", "I498": "Other arrhythmia",
-    "I340": "MR"
+    "I480": "Paroxysmal Af",
+    "I4819": "Persistent Af",
+    "I471": "SVT",
+    "I495": "SSS",
+    "I442": "CAVB",
+    "I483": "AFL",
+    "I470": "VT",
+    "I4891": "Af",
+    "I4811": "Chronic Af",
+    "I209": "CAD/Angina",
+    "R002": "Abnormal heart-beat",
+    "I509": "Heart Failure",
+    "R079": "Chest Pain",
+    "I441": "2nd-degree AVB",
+    "Z950": "Pacemaker status",
+    "I498": "Other arrhythmia",
+    "I340": "MR",
+    "I48.0": "Paroxysmal Af",
+    "I48.19": "Persistent Af",
+    "I47.1": "SVT",
+    "I49.5": "SSS",
+    "I44.2": "CAVB",
+    "I48.3": "AFL",
+    "I47.0": "VT",
+    "I48.91": "Af",
+    "I48.11": "Chronic Af",
+    "I20.9": "CAD/Angina",
+    "R00.2": "Abnormal heart-beat",
+    "I50.9": "Heart Failure",
+    "R07.9": "Chest Pain",
+    "I44.1": "2nd-degree AVB",
+    "Z95.0": "Pacemaker status",
+    "I49.8": "Other arrhythmia",
+    "I34.0": "MR"
 }
 
 final_output_text = ""
@@ -207,7 +236,7 @@ def process_file_content(raw_text):
             
         raw_date, patient_id, doc_code, bed_info, icd_code = parts[2], parts[4], parts[7], parts[8], parts[11]
 
-        # 1. 日期簡化
+        # 1. 日期簡化與 ISO 週別判斷
         formatted_date = ""
         iso_week = None
         try:
@@ -217,15 +246,20 @@ def process_file_content(raw_text):
         except Exception:
             formatted_date = raw_date[:10] if len(raw_date) >= 10 else raw_date
         
-        # 2. 跨週插入分隔線
+        # 2. 跨週自動插入分隔線
         if iso_week is not None:
             if current_last_week is not None and iso_week != current_last_week:
                 output_lines.append("-" * 70)
             current_last_week = iso_week
 
+        # 3. 醫師與疾病代碼轉換 (內含帶點與去點的雙重格式支援)
         resolved_doc = DOCTOR_MAP.get(doc_code, doc_code)
-        resolved_diag = ICD_MAP.get(icd_code, icd_code)
+        
+        # 清理診斷碼字串，確保比對準確
+        clean_icd = icd_code.strip().upper()
+        resolved_diag = ICD_MAP.get(clean_icd, icd_code)
 
+        # 4. 欄位完美對齊組裝
         row_str = (
             formatted_date.ljust(col_widths["date"]) + patient_id.ljust(col_widths["id"]) +
             resolved_doc.ljust(col_widths["doc"]) + bed_info.ljust(col_widths["bed"]) + resolved_diag
@@ -239,7 +273,6 @@ def process_file_content(raw_text):
     final_output_text = "\n".join(output_lines)
     return final_output_text, valid_row_count
 
-# 監聽來自網頁 JS 按鈕點擊發送的事件
 @bind(window, "startTransform")
 def run_transform(evt):
     file_list = document["fileInput"].files
