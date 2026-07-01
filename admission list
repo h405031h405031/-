@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>臨床資料格式轉換工具 (全面對照優化版)</title>
+    <script src="https://cdn.jsdelivr.net/npm/brython@3.12.0/brython.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/brython@3.12.0/brython_stdlib.js"></script>
+    
+    <style>
+        body { font-family: 'Courier New', Courier, monospace, Arial, sans-serif; padding: 20px; max-width: 950px; margin: 0 auto; background-color: #f5f5f5; }
+        .container { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .btn { background-color: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; margin-top: 10px; font-weight: bold; }
+        .btn:disabled { background-color: #cccccc; cursor: not-allowed; }
+        textarea { width: 100%; height: 400px; margin-top: 15px; font-family: monospace; font-size: 14px; white-space: pre; overflow-x: auto; line-height: 1.4; }
+        .status { margin-top: 10px; color: #28a745; font-weight: bold; }
+        .info-box { background-color: #e9ecef; padding: 15px; border-radius: 4px; margin-bottom: 20px; font-size: 0.9em; line-height: 1.5; }
+    </style>
+</head>
+
+<body onload="brython()">
+
+<div class="container">
+    <h2>臨床資料格式轉換工具 (醫師/ICD自動對照)</h2>
+    <div class="info-box">
+        <strong>🔒 隱私安全提示：</strong> 此網頁純粹在您的瀏覽器本機執行 Python 邏輯，任何上傳的醫療資料皆<strong>不會</strong>傳輸到任何伺服器。<br>
+        <strong>📅 功能說明：</strong> 依據 <code>coding data</code> 設定，自動轉換 ICD 碼與醫師名稱，並依<strong>「週（週一至週日）」</strong>自動繪製週分隔線。
+    </div>
+    
+    <input type="file" id="fileInput" accept=".txt"><br><br>
+    
+    <button id="convertBtn" class="btn" disabled>開始轉換資料</button>
+    <button id="downloadBtn" class="btn" style="background-color: #28a745;" disabled>下載新 .txt 檔案</button>
+    
+    <div id="statusMsg" class="status"></div>
+    
+    <h3>轉換結果預覽：</h3>
+    <textarea id="outputArea" readonly placeholder="轉換後的文字將顯示於此..."></textarea>
+</div>
+
+<script type="text/python">
+from browser import document, window, bind
+from datetime import datetime
+
+processed_text = ""
+raw_text = ""
+
+# ==========================================
+# 📋 【從 Excel coding data 與原始檔案整合的完整對照表】
+# ==========================================
+# 1. ICD-10 疾病代碼對照（已補齊原始檔案中遺漏的診斷項目）
+DIAGNOSIS_MAP = {
+    "I480": "Paroxysmal Af",
+    "I4819": "Persistent Af",
+    "I471": "SVT",
+    "I495": "SSS",
+    "I442": "CAVB",
+    "I483": "AFL",
+    "I470": "VT",
+    "I4891": "Af", 
+    "I4811": "Chronic Af",
+    "I209": "CAD/Angina",
+    "R002": "Abnormal heart-beat",
+    "I509": "Heart Failure",
+    "R079": "Chest Pain",
+    "I441": "2nd-degree AVB",     # 新增：二度房室傳導阻滯
+    "Z950": "Pacemaker status",   # 新增：裝有心臟節律器狀態
+    "I498": "Other arrhythmia",   # 新增：其他心律不整
+    "I340": "MR"                  # 新增：二尖瓣逆流
+}
+
+# 2. 醫師代碼對照
+DOCTOR_MAP = {
+    "2867": "2867周宗川",
+    "1449": "1449",
+    "2341": "2341",
+    "5240": "5240",
+    "3656": "3656",
+    "1816": "1816",
+    "7172": "7172",
+    "3436": "3436",
+    "3015": "3015"
+}
+
+def get_week_number(date_str):
+    """計算該日期屬於哪一年的第幾週（以週一為一週的開始）"""
+    try:
+        pure_date = date_str.split()[0]
+        dt = datetime.strptime(pure_date, "%Y/%m/%d")
+        return dt.isocalendar()[0], dt.isocalendar()[1]
+    except Exception:
+        return None
+
+@bind(document["fileInput"], "change")
+def file_selected(evt):
+    global raw_text
+    file = evt.target.files[0]
+    if file:
+        reader = window.FileReader.new()
+        def on_load_end(e):
+            global raw_text
+            raw_text = e.target.result
+            document["convertBtn"].disabled = False
+            document["statusMsg"].text = f"成功載入檔案：{file.name}，請點擊轉換。"
+            
+        reader.bind("loadend", on_load_end)
+        reader.readAsText(file, "UTF-8")
+
+@bind(document["convertBtn"], "click")
+def convert_data(evt):
+    global processed_text, raw_text
+    document["statusMsg"].text = "正在進行週分隔與雙重對照優化..."
+    
+    try:
+        lines = raw_text.split("\n")
+        output_lines = []
+        
+        # 寫入格式化後的欄位標題
+        output_lines.append("預住院日\t病歷號\t\t醫師\t\t床等\t\t診斷")
+        
+        last_week = None
+        
+        for line in lines:
+            line = line.strip()
+            if not line or "院區,來源" in line or ".strip()      
+            chart_no = parts[4].strip()      
+            doc_id = parts[7].strip()        
+            bed_type = parts[8].strip()      
+            icd_code = parts[11].strip()     
+            
+            # 1. 簡化日期 (YYYY/MM/DD -> MM/DD)
+            try:
+                pure_date = raw_date.split()[0]
+                date_obj = datetime.strptime(pure_date, "%Y/%m/%d")
+                formatted_date = date_obj.strftime("%m/%d")
+            except:
+                formatted_date = raw_date
+                
+            # 2. 週分隔線判定
+            current_week = get_week_number(raw_date)
+            if last_week is not None and current_week != last_week:
+                output_lines.append("\n----------------------------------------------------------------------\n")
+            last_week = current_week
+            
+            # 3. 醫師代碼轉換
+            doc_display = DOCTOR_MAP.get(doc_id, doc_id)
+            # 為了排版整齊，如果名字較短補齊定位點
+            if len(doc_display) < 8:
+                doc_display += "\t"
+            
+            # 4. 診斷碼轉換
+            dx_display = DIAGNOSIS_MAP.get(icd_code, icd_code)
+            if not dx_display:
+                dx_display = icd_code
+                
+            # 5. 組合輸出
+            formatted_line = f"{formatted_date}\t{chart_no}\t\t{doc_display}\t{bed_type}\t\t{dx_display}"
+            output_lines.append(formatted_line)
+            
+        processed_text = "\n".join(output_lines)
+        
+        document["outputArea"].value = processed_text
+        document["downloadBtn"].disabled = False
+        document["statusMsg"].text = "轉換成功！已完成全自動校對與排版。"
+        
+    except Exception as e:
+        document["statusMsg"].text = f"發生錯誤: {str(e)}"
+
+@bind(document["downloadBtn"], "click")
+def download_file(evt):
+    global processed_text
+    blob = window.Blob.new([processed_text], {"type": "text/plain;charset=utf-8"})
+    url = window.URL.createObjectURL(blob)
+    link = document.createElement("a")
+    link.href = url
+    link.download = "clinical_data_final.txt"
+    link.click()
+    window.URL.revokeObjectURL(url)
+</script>
+
+</body>
+</html>
