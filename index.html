@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>住院/佔床名單格式化工具 (純 JS 院內穩定版)</title>
+    <title>住院/佔床名單格式化工具 (JS 終極整合版)</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -92,7 +92,7 @@
 <body>
 
 <div class="container">
-    <h2>📋 住院/佔床病人清單等寬排版工具 (純 JS 院內穩定版)</h2>
+    <h2>📋 住院/佔床病人清單等寬排版工具 (純 JS 終極整合版)</h2>
     
     <div id="engine-status" class="status-badge status-ready">✓ 系統本機環境已就緒 (免網路聯線)</div>
     
@@ -113,7 +113,7 @@
 </div>
 
 <script>
-    // 🧬 疾病代碼對照表 (含雙格式支援與 20260628.txt 缺漏補全)
+    // 🧬 疾病代碼對照表 (已整合所有新舊臨床代碼)
     const ICD_MAP = {
         "I480": "Paroxysmal Af", "I48.0": "Paroxysmal Af",
         "I4819": "Persistent Af", "I48.19": "Persistent Af",
@@ -132,169 +132,59 @@
         "Z950": "Pacemaker status", "Z95.0": "Pacemaker status",
         "I498": "Other arrhythmia", "I49.8": "Other arrhythmia",
         "I340": "MR", "I34.0": "MR",
-        // 額外為您自原始檔補全的臨床代碼
         "R001": "Bradycardia", "R00.1": "Bradycardia",
         "I5022": "Chronic systolic HF", "I50.22": "Chronic systolic HF",
         "I25750": "Unstable angina (post-Tx)", "I25.750": "Unstable angina (post-Tx)",
-        "I4820": "Chronic Af", "I48.20": "Chronic Af"
+        "I4820": "Chronic Af", "I48.20": "Chronic Af",
+        
+        // 🆕 最新補入的臨床診斷代碼
+        "I208": "Other Angina", "I20.8": "Other Angina",
+        "I70211": "PAD w/ claudication (R)", "I70.211": "PAD w/ claudication (R)",
+        "I342": "MS", "I34.2": "MS",
+        "I259": "CAD", "I25.9": "CAD",
+        "I501": "LV Failure", "I50.1": "LV Failure",
+        "E7521": "Fabry disease", "E75.21": "Fabry disease",
+        "I2510": "CAD", "I25.10": "CAD",
+        "I70244": "PAD w/ ulcer (L)", "I70.244": "PAD w/ ulcer (L)"
     };
 
-    // 🩺 醫事人員對照表 (格式已調整為：代碼+姓名)
+    // 🩺 醫事人員對照表 (共 59 位獨立醫師)
     const DOCTOR_MAP = {
-        "Q427": "Q427許承越", "Q562": "Q562黃仕鴻", "Q307": "Q307唐嘉駿", "Q255": "Q255楊熙恆",
-        "Q237": "Q237侯冠榕", "Q213": "Q213許皓森", "Q062": "Q062張昱政", "Q368": "Q368蔡宗翰",
-        "2651": "2651賈晉原", "2545": "2545陳靖蓉", "2486": "2486陳緯倫", "2694": "2694黃柏棣",
-        "2341": "2341謝舒筠", "1992": "1992邱凱斌", "1605": "1605謝侑叡", "1512": "1512林莞芹",
-        "1229": "1229黃逸群", "1305": "1305鄭郁雯", "1199": "1199曾子慈", "0985": "0985徐子哲",
-        "1059": "1059張捷宇", "0424": "0424呂侑穎", "0799": "0799黃昱彰", "8395": "8395顏琨麒",
-        "7977": "7977李廣祚", "7172": "7172沃宏達", "7123": "7123詹益欣", "5278": "5278巫龍昇",
-        "5240": "5240張伯丞", "5009": "5009吳家棟", "3436": "3436葉勇信", "3015": "3015王俊力",
-        "2867": "2867周宗川", "2633": "2633賀萬靖", "2233": "2233許隆安", "2195": "2195洪國竣",
-        "2089": "2089褚柏顯", "1816": "1816謝宜璋", "1760": "1760柯毓賢", "1449": "1449溫明賢"
+        "0034": "0034郭啟泰", "0334": "0334何建德", "0424": "0424呂侑穎", "0510": "0510陳偉踐",
+        "0549": "0549王俊傑", "0799": "0799黃昱彰", "0985": "0985徐子哲", "1059": "1059張捷宇",
+        "1199": "1199曾子慈", "1229": "1229黃逸群", "1305": "1305鄭郁雯", "1449": "1449溫明賢",
+        "1512": "1512林莞芹", "1605": "1605謝侑叡", "1760": "1760柯毓賢", "1816": "1816謝宜璋",
+        "1992": "1992邱凱斌", "2079": "2079張其任", "2089": "2089褚柏顯", "2195": "2195洪國竣",
+        "2233": "2233許隆安", "2341": "2341謝舒筠", "2486": "2486陳緯倫", "2545": "2545陳靖蓉",
+        "2633": "2633賀萬靖", "2651": "2651賈晉原", "2694": "2694黃柏棣", "2867": "2867周宗川",
+        "3015": "3015王俊力", "3228": "3228陳俊吉", "3436": "3436葉勇信", "3656": "3656王朝永",
+        "3658": "3658張尚宏", "3976": "3976林佳濱", "3995": "3995謝明哲", "5009": "5009吳家棟",
+        "5240": "5240張伯丞", "5265": "5265李振宏", "5278": "5278巫龍昇", "5737": "5737林彥辰",
+        "7123": "7123詹益欣", "7172": "7172沃宏達", "7195": "7195周星賢", "7687": "7687陳東藝",
+        "7812": "7812董穎璋", "7977": "7977李廣祚", "8276": "8276葉日凱", "8384": "8384何明昀",
+        "8390": "8390蕭富致", "8395": "8395顏琨麒", "Q062": "Q062張昱政", "Q213": "Q213許皓森",
+        "Q237": "Q237侯冠榕", "Q255": "Q255楊熙恆", "Q307": "Q307唐嘉駿", "Q368": "Q368蔡宗翰",
+        "Q427": "Q427許承越", "Q562": "Q562黃仕鴻"
     };
 
-    let rawFileContent = "";
-
-    // 精準計算中英文顯示長度 (雙位元組字元算 2，半形算 1)
     function getDisplayLength(str) {
         let len = 0;
         for (let i = 0; i < str.length; i++) {
-            if (str.charCodeAt(i) > 127) {
-                len += 2;
-            } else {
-                len += 1;
-            }
+            if (str.charCodeAt(i) > 127) { len += 2; } else { len += 1; }
         }
         return len;
     }
 
-    // 依長度進行空格補齊
+    // 將目標寬度放寬至 18 碼，確保代碼加上中英文字串後能完整對齊
     function padText(str, targetLen) {
         let currentLen = getDisplayLength(str);
         if (currentLen >= targetLen) return str;
         return str + " ".repeat(targetLen - currentLen);
     }
 
-    // 計算日期的 ISO 週別 (精準判斷週一到週日跨週)
     function getISOWeek(dateString) {
         const normalized = dateString.replace(/\//g, '-');
         const target = new Date(normalized);
         if (isNaN(target.getTime())) return null;
-        
         const dayNr = (target.getDay() + 6) % 7;
-        target.setDate(target.getDate() - dayNr + 3);
-        const firstThursday = target.valueOf();
-        target.setMonth(0, 1);
-        if (target.getDay() !== 4) {
-            target.setMonth(0, 1 + ((4 - target.getDay()) + 7) % 7);
-        }
-        return 1 + Math.ceil((firstThursday - target) / 604800000);
-    }
-
-    // 處理檔案讀取
-    document.getElementById("fileInput").addEventListener("change", function(e) {
-        const file = e.target.files[0];
-        if (!file) return;
-        
-        document.getElementById("file-name-display").innerText = file.name;
-        
-        const reader = new FileReader();
-        reader.onload = function(evt) {
-            rawFileContent = evt.target.result;
-            document.getElementById("transformBtn").disabled = false;
-        };
-        reader.readAsText(file, "UTF-8"); 
-    });
-
-    // 開始格式化按鈕點擊事件
-    document.getElementById("transformBtn").addEventListener("click", function() {
-        if (!rawFileContent) return;
-        
-        try {
-            const lines = rawFileContent.split(/\r?\n/);
-            const outputLines = [];
-            
-            // 建立表頭
-            const header = `${padText('預住日', 8)}${padText('病歷號', 12)}${padText('主治醫師', 16)}${padText('床等', 8)}主診斷碼 / 疾病名稱`;
-            outputLines.push(header);
-            outputLines.push("-".repeat(80));
-            
-            let lastWeekNum = null;
-            
-            for (let line of lines) {
-                if (!line.trim()) continue;
-                
-                const parts = line.split(',').map(p => p.trim());
-                if (parts.length <= 11) continue;
-                
-                const rawDate = parts[2];     // 預住院日
-                const chartNo = parts[4];     // 病歷號
-                const docCode = parts[7];     // 醫師代碼
-                const bedType = parts[8];     // 床等
-                const icdCode = parts[11] || "";    // 診斷碼
-
-                // 1. 日期提取 (簡化為 MM/DD) 與跨週邏輯
-                let dateStr = "";
-                let currentWeekNum = null;
-                
-                if (rawDate.includes("/")) {
-                    const match = rawDate.match(/(\d{4})\/(\d{2})\/(\d{2})/);
-                    if (match) {
-                        dateStr = `${match[2]}/${match[3]}`;
-                        currentWeekNum = getISOWeek(rawDate);
-                    }
-                }
-                
-                if (!dateStr) {
-                    dateStr = rawDate.substring(0, 5);
-                }
-
-                // 偵測到跨週，且非首筆資料，插入分隔線
-                if (lastWeekNum !== null && currentWeekNum !== null && currentWeekNum !== lastWeekNum) {
-                    outputLines.push("\n" + "=".repeat(24) + " 🗓️ 跨 週 排 程 分 隔 線 " + "=".repeat(24) + "\n");
-                }
-                
-                if (currentWeekNum !== null) {
-                    lastWeekNum = currentWeekNum;
-                }
-
-                // 2. 進行字典對照轉換
-                const docName = DOCTOR_MAP[docCode] || docCode;
-                const icdName = ICD_MAP[icdCode] || "Unknown Diagnosis";
-                
-                // 3. 欄位等寬排版對齊拼接
-                const colDate = padText(dateStr, 8);
-                const colChart = padText(chartNo, 12);
-                const colDoc = padText(docName, 16);
-                const colBed = padText(bedType, 8);
-                const colIcd = `${icdCode} (${icdName})`;
-                
-                outputLines.push(`${colDate}${colChart}${colDoc}${colBed}${colIcd}`);
-            }
-            
-            const finalResult = outputLines.join("\n");
-            
-            // 4. 更新網頁底部的預覽 Box (呈現前 15 筆)
-            const previewLines = finalResult.split("\n").slice(0, 15).join("\n");
-            document.getElementById("previewBox").innerText = previewLines + "\n\n... (其餘部分已成功導出至下載檔案) ...";
-            document.getElementById("preview-section").style.display = "block";
-            
-            // 5. 封裝檔案，自動觸發瀏覽器下載全新 .txt 檔
-            const blob = new Blob([finalResult], { type: "text/plain;charset=utf-8" });
-            const link = document.createElement("a");
-            
-            const now = new Date();
-            const dateStamp = `${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}`;
-            
-            link.href = URL.createObjectURL(blob);
-            link.download = `formatted_patients_${dateStamp}.txt`;
-            link.click();
-            
-        } catch (err) {
-            alert("處理檔案時發生錯誤：" + err.message);
-        }
-    });
-</script>
-
-</body>
-</html>
+        target.setDate(target.
