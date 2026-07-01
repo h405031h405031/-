@@ -31,7 +31,7 @@
     <button id="convertBtn" class="btn" disabled>開始轉換資料</button>
     <button id="downloadBtn" class="btn" style="background-color: #28a745;" disabled>下載新 .txt 檔案</button>
     
-    <div id="statusMsg" class="status"></div>
+    <div id="statusMsg" class="status" style="color: #007bff;">請先點擊「選擇檔案」上傳原始臨床 .txt 檔。</div>
     
     <h3>轉換結果預覽：</h3>
     <textarea id="outputArea" readonly placeholder="轉換後的文字將顯示於此..."></textarea>
@@ -41,13 +41,14 @@
 from browser import document, window, bind
 from datetime import datetime
 
+# 預先初始化全局變數，防止未讀取檔案時報錯
 processed_text = ""
 raw_text = ""
 
 # ==========================================
 # 📋 【從 Excel coding data 與原始檔案整合的完整對照表】
 # ==========================================
-# 1. ICD-10 疾病代碼對照（已補齊原始檔案中遺漏的診斷項目）
+# 1. ICD-10 疾病代碼對照
 DIAGNOSIS_MAP = {
     "I480": "Paroxysmal Af",
     "I4819": "Persistent Af",
@@ -62,10 +63,10 @@ DIAGNOSIS_MAP = {
     "R002": "Abnormal heart-beat",
     "I509": "Heart Failure",
     "R079": "Chest Pain",
-    "I441": "2nd-degree AVB",     # 新增：二度房室傳導阻滯
-    "Z950": "Pacemaker status",   # 新增：裝有心臟節律器狀態
-    "I498": "Other arrhythmia",   # 新增：其他心律不整
-    "I340": "MR"                  # 新增：二尖瓣逆流
+    "I441": "2nd-degree AVB",
+    "Z950": "Pacemaker status",
+    "I498": "Other arrhythmia",
+    "I340": "MR"
 }
 
 # 2. 醫師代碼對照
@@ -100,7 +101,8 @@ def file_selected(evt):
             global raw_text
             raw_text = e.target.result
             document["convertBtn"].disabled = False
-            document["statusMsg"].text = f"成功載入檔案：{file.name}，請點擊轉換。"
+            document["statusMsg"].style.color = "#28a745"
+            document["statusMsg"].text = f"成功載入檔案：{file.name}，請點擊「開始轉換資料」。"
             
         reader.bind("loadend", on_load_end)
         reader.readAsText(file, "UTF-8")
@@ -108,6 +110,13 @@ def file_selected(evt):
 @bind(document["convertBtn"], "click")
 def convert_data(evt):
     global processed_text, raw_text
+    
+    if not raw_text:
+        document["statusMsg"].style.color = "red"
+        document["statusMsg"].text = "發生錯誤：尚未偵測到檔案內容，請重新選擇檔案。"
+        return
+        
+    document["statusMsg"].style.color = "#007bff"
     document["statusMsg"].text = "正在進行週分隔與雙重對照優化..."
     
     try:
@@ -143,7 +152,6 @@ def convert_data(evt):
             
             # 3. 醫師代碼轉換
             doc_display = DOCTOR_MAP.get(doc_id, doc_id)
-            # 為了排版整齊，如果名字較短補齊定位點
             if len(doc_display) < 8:
                 doc_display += "\t"
             
@@ -160,9 +168,11 @@ def convert_data(evt):
         
         document["outputArea"].value = processed_text
         document["downloadBtn"].disabled = False
+        document["statusMsg"].style.color = "#28a745"
         document["statusMsg"].text = "轉換成功！已完成全自動校對與排版。"
         
     except Exception as e:
+        document["statusMsg"].style.color = "red"
         document["statusMsg"].text = f"發生錯誤: {str(e)}"
 
 @bind(document["downloadBtn"], "click")
