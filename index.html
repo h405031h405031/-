@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>住院/佔床名單格式化工具 (JS 終極完美版-已修正)</title>
+    <title>住院/佔床名單格式化工具 (最終校正穩定版)</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -92,7 +92,7 @@
 <body>
 
 <div class="container">
-    <h2>📋 住院/佔床病人清單等寬排版工具 (純 JS 終極完美版)</h2>
+    <h2>📋 住院/佔床病人清單等寬排版工具 (純 JS 最終校正版)</h2>
     
     <div id="engine-status" class="status-badge status-ready">✓ 系統本機環境已就緒 (免網路聯線)</div>
     
@@ -146,7 +146,7 @@
         "I70244": "PAD w/ ulcer (L)", "I70.244": "PAD w/ ulcer (L)"
     };
 
-    // 🩺 醫事人員對照表
+    // 🩺 醫事人員對照表 (精準校正版)
     const DOCTOR_MAP = {
         "0034": "0034郭啟泰", "0334": "0334何建德", "0424": "0424呂侑穎", "0510": "0510陳偉踐",
         "0549": "0549王俊傑", "0799": "0799黃昱彰", "0985": "0985徐子哲", "1059": "1059張捷宇",
@@ -218,6 +218,8 @@
             
             for (let line of lines) {
                 if (!line.trim()) continue;
+                
+                // 讀取特定欄位索引
                 const parts = line.split(',').map(p => p.trim());
                 if (parts.length <= 11) continue;
                 
@@ -225,10 +227,11 @@
                 const chartNo = parts[4];     
                 let docCode = parts[7];     
                 const bedType = parts[8];     
-                const icdCode = parts[11] || "";    
+                let icdCode = parts[11] || "";    
 
-                // ✅ 已精準修正：只清除隱形控制字元，1-9 數字絕對不會再消失了！
+                // 精準移除看不見的控制字元與前後雜訊，不傷及 0-9 數字
                 docCode = docCode.replace(/[^a-zA-Z0-9]/g, '');
+                icdCode = icdCode.replace(/[^a-zA-Z0-9\.]/g, '');
 
                 let dateStr = "";
                 let currentWeekNum = null;
@@ -241,6 +244,7 @@
                 }
                 if (!dateStr) { dateStr = rawDate.substring(0, 5); }
 
+                // 跨週分隔線
                 if (lastWeekNum !== null && currentWeekNum !== null && currentWeekNum !== lastWeekNum) {
                     outputLines.push("\n" + "=".repeat(24) + " 🗓️ 跨 週 排 程 分 隔 線 " + "=".repeat(24) + "\n");
                 }
