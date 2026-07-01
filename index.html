@@ -3,351 +3,287 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>臨床預住院清單轉檔工具</title>
-    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/brython@3.12.4/brython.min.js"></script>
-    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/brython@3.12.4/brython_modules.js"></script>
+    <title>住院/佔床名單格式化工具</title>
     
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/brython/3.12.0/brython.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/brython/3.12.0/brython_stdlib.min.js"></script>
+
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            margin: 20px;
-            background-color: #f5f7fa;
+            background-color: #f4f6f9;
             color: #333;
+            margin: 0;
+            padding: 20px;
         }
         .container {
-            max-width: 900px;
+            max-width: 950px;
             margin: 0 auto;
-            background: white;
-            padding: 25px;
+            background: #fff;
+            padding: 30px;
             border-radius: 8px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
-        h2 { color: #1a365d; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; }
-        .privacy-notice {
-            background-color: #ebf8ff;
-            border-left: 4px solid #3182ce;
-            color: #2b6cb0;
-            padding: 10px 15px;
+        h2 {
+            color: #1a5276;
+            margin-top: 0;
+            border-bottom: 2px solid #1a5276;
+            padding-bottom: 10px;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: bold;
             margin-bottom: 20px;
-            font-size: 0.9em;
-            border-radius: 4px;
         }
-        .control-panel {
-            margin-bottom: 15px;
-            display: flex;
-            gap: 12px;
-            align-items: center;
-            flex-wrap: wrap;
+        .status-init { background-color: #ffe699; color: #7d5a00; }
+        .status-ready { background-color: #d4edda; color: #155724; }
+        
+        .control-group {
+            margin-bottom: 20px;
         }
+        input[type="file"] {
+            display: none;
+        }
+        .file-label {
+            display: inline-block;
+            background-color: #2980b9;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .file-label:hover { background-color: #21618c; }
+        
         .btn {
+            background-color: #27ae60;
             color: white;
             border: none;
-            padding: 10px 18px;
-            font-size: 0.95em;
+            padding: 10px 24px;
+            border-radius: 5px;
             cursor: pointer;
-            border-radius: 4px;
-            transition: background 0.2s;
+            font-size: 16px;
             font-weight: bold;
+            transition: background 0.2s;
         }
-        #runBtn { background-color: #38a169; }
-        #runBtn:hover:not(:disabled) { background-color: #2f855a; }
-        
-        #downloadBtn { background-color: #3182ce; }
-        #downloadBtn:hover:not(:disabled) { background-color: #2b6cb0; }
-        
-        .btn:disabled { 
-            background-color: #cbd5e0 !important; 
-            color: #718096 !important;
-            cursor: not-allowed !important; 
+        .btn:hover { background-color: #1e8449; }
+        .btn:disabled {
+            background-color: #bdc3c7 !important;
+            cursor: not-allowed;
         }
         
-        .progress-container {
-            width: 100%;
-            background-color: #e2e8f0;
-            border-radius: 4px;
-            margin-bottom: 20px;
-            display: none;
-            position: relative;
-            height: 8px;
-            overflow: hidden;
+        #file-name-display {
+            margin-left: 10px;
+            font-style: italic;
+            color: #666;
         }
-        .progress-bar {
-            height: 100%;
-            width: 0%;
-            background-color: #3182ce;
-            transition: width 0.3s ease;
-        }
-        .progress-bar.success { background-color: #38a169; }
-        .progress-bar.error { background-color: #e53e3e; }
-
-        #previewArea {
-            width: 100%;
-            height: 450px;
+        
+        pre {
+            background-color: #2c3e50;
+            color: #ecf0f1;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
             font-family: "Courier New", Courier, monospace;
             font-size: 14px;
-            background-color: #1e1e1e;
-            color: #f4f4f4;
-            padding: 15px;
-            border-radius: 6px;
-            box-sizing: border-box;
-            resize: vertical;
+            line-height: 1.5;
+            max-height: 400px;
         }
-        .status-msg { font-weight: bold; margin-left: 5px; font-size: 0.95em; }
-        .status-success { color: #38a169; }
-        .status-error { color: #e53e3e; }
-        .status-info { color: #dd6b20; }
     </style>
 </head>
-
-<body onload="brython()">
+<body onload="brython(1)">
 
 <div class="container">
-    <h2>臨床資料轉檔工具 (預住院清單/交班單驗證)</h2>
-    <div class="privacy-notice">
-        🔒 <strong>隱私安全宣告：</strong>本工具完全於您的瀏覽器本機端 (Client-side) 執行運算，絕不傳輸任何病人隱私資料至外部網路或伺服器，請安心使用。
+    <h2>📋 住院/佔床病人清單等寬排版工具</h2>
+    
+    <div id="engine-status" class="status-badge status-init">系統引擎初始化中，請稍候...</div>
+    
+    <div class="control-group">
+        <label for="fileInput" class="file-label">選擇原始清單 (.txt/.csv)</label>
+        <input type="file" id="fileInput" accept=".txt,.csv" disabled>
+        <span id="file-name-display">尚未選擇檔案</span>
     </div>
-
-    <div class="control-panel">
-        <input type="file" id="fileInput" accept=".txt,.csv" />
-        <button class="btn" id="runBtn" disabled onclick="triggerPythonRun()">▶ 開始執行轉檔</button>
-        <button class="btn" id="downloadBtn" disabled>📥 下載轉檔後的 .txt</button>
-        <span id="statusMessage" class="status-msg"></span>
+    
+    <div class="control-group">
+        <button id="transformBtn" class="btn" disabled>開始格式化排版</button>
     </div>
-
-    <div class="progress-container" id="progressContainer">
-        <div class="progress-bar" id="progressBar"></div>
+    
+    <div id="preview-section" style="display:none;">
+        <h3>👁️ 排版預覽 (僅顯示前幾筆)</h3>
+        <pre id="previewBox"></pre>
     </div>
-
-    <h3>轉換預覽框</h3>
-    <textarea id="previewArea" readonly placeholder="請先上傳原始預住院清單檔案，並點擊「開始執行轉檔」..."></textarea>
 </div>
 
-<script type="text/javascript">
-    const fileInput = document.getElementById('fileInput');
-    const runBtn = document.getElementById('runBtn');
-    const downloadBtn = document.getElementById('downloadBtn');
-    const statusMessage = document.getElementById('statusMessage');
-    const previewArea = document.getElementById('previewArea');
-    const progressContainer = document.getElementById('progressContainer');
-    const progressBar = document.getElementById('progressBar');
+<script>
+    let rawFileContent = "";
 
-    fileInput.addEventListener('change', function() {
-        progressContainer.style.display = "none";
-        progressBar.style.width = "0%";
-        progressBar.className = "progress-bar";
-        previewArea.value = "";
+    window.onPythonReady = function() {
+        const statusBadge = document.getElementById("engine-status");
+        statusBadge.innerText = "✓ 系統引擎已就緒";
+        statusBadge.className = "status-badge status-ready";
+        document.getElementById("fileInput").disabled = false;
+    };
 
-        if (fileInput.files.length > 0) {
-            runBtn.removeAttribute('disabled');
-            downloadBtn.setAttribute('disabled', 'disabled');
-            statusMessage.textContent = `已選取：${fileInput.files[0].name}，請點擊轉檔。`;
-            statusMessage.className = "status-msg status-info";
-        } else {
-            runBtn.setAttribute('disabled', 'disabled');
-        }
+    document.getElementById("fileInput").addEventListener("change", function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        document.getElementById("file-name-display").innerText = file.name;
+        
+        const reader = new FileReader();
+        reader.onload = function(evt) {
+            rawFileContent = evt.target.result;
+            document.getElementById("transformBtn").disabled = false;
+        };
+        reader.readAsText(file, "UTF-8");
     });
 
-    function triggerPythonRun() {
-        const event = new CustomEvent('startTransform');
-        window.dispatchEvent(event);
-    }
+    document.getElementById("transformBtn").addEventListener("click", function() {
+        if (!rawFileContent) return;
+        
+        if (typeof window.pythonRunTransform === "function") {
+            window.pythonRunTransform(rawFileContent);
+        } else {
+            alert("錯誤：Python 核心尚未綁定成功，請重新整理網頁。");
+        }
+    });
 </script>
 
 <script type="text/python">
-import re
-from browser import document, window, bind, timer
+import window
 from datetime import datetime
 
-# 1. 醫事人員對照字典
-DOCTOR_MAP = {
-    "2867": "2867周宗川", "1449": "1449林茂欣", "2341": "2341高憲立",
-    "5240": "5240李任光", "3656": "3656黃瑞仁", "1816": "1816王宗道",
-    "7172": "7172賀立婷", "3436": "3436劉言言", "3015": "3015劉耕豪",
-    "7023": "7023葉志凡", "5035": "5035林亮宇", "4850": "4850游治節",
-    "3505": "3505王居萬", "2213": "2213林彥宏", "5686": "5686莊志明"
-}
-
-# 2. 疾病代碼對照字典 (已完整讀取並補齊所有欄位)
+# 🧬 疾病代碼對照表
 ICD_MAP = {
-    "I480": "Paroxysmal Af",
-    "I4819": "Persistent Af",
-    "I471": "SVT",
-    "I495": "SSS",
-    "I442": "CAVB",
-    "I483": "AFL",
-    "I470": "VT",
-    "I4891": "Af",
-    "I4811": "Chronic Af",
-    "I209": "CAD/Angina",
-    "R002": "Abnormal heart-beat",
-    "I509": "Heart Failure",
-    "R079": "Chest Pain",
-    "I441": "2nd-degree AVB",
-    "Z950": "Pacemaker status",
-    "I498": "Other arrhythmia",
-    "I340": "MR",
-    "I48.0": "Paroxysmal Af",
-    "I48.19": "Persistent Af",
-    "I47.1": "SVT",
-    "I49.5": "SSS",
-    "I44.2": "CAVB",
-    "I48.3": "AFL",
-    "I47.0": "VT",
-    "I48.91": "Af",
-    "I48.11": "Chronic Af",
-    "I20.9": "CAD/Angina",
-    "R00.2": "Abnormal heart-beat",
-    "I50.9": "Heart Failure",
-    "R07.9": "Chest Pain",
-    "I44.1": "2nd-degree AVB",
-    "Z95.0": "Pacemaker status",
-    "I49.8": "Other arrhythmia",
-    "I34.0": "MR"
+    "I480": "Paroxysmal Af", "I48.0": "Paroxysmal Af",
+    "I4819": "Persistent Af", "I48.19": "Persistent Af",
+    "I471": "SVT", "I47.1": "SVT",
+    "I495": "SSS", "I49.5": "SSS",
+    "I442": "CAVB", "I44.2": "CAVB",
+    "I483": "AFL", "I48.3": "AFL",
+    "I470": "VT", "I47.0": "VT",
+    "I4891": "Af", "I48.91": "Af",
+    "I4811": "Chronic Af", "I48.11": "Chronic Af",
+    "I209": "CAD/Angina", "I20.9": "CAD/Angina",
+    "R002": "Abnormal heart-beat", "R00.2": "Abnormal heart-beat",
+    "I509": "Heart Failure", "I50.9": "Heart Failure",
+    "R079": "Chest Pain", "R07.9": "Chest Pain",
+    "I441": "2nd-degree AVB", "I44.1": "2nd-degree AVB",
+    "Z950": "Pacemaker status", "Z95.0": "Pacemaker status",
+    "I498": "Other arrhythmia", "I49.8": "Other arrhythmia",
+    "I340": "MR", "I34.0": "MR"
 }
 
-final_output_text = ""
+# 🩺 醫事人員對照表 (格式已全面修正為：代碼+姓名)
+DOCTOR_MAP = {
+    "Q427": "Q427許承越", "Q562": "Q562黃仕鴻", "Q307": "Q307唐嘉駿", "Q255": "Q255楊熙恆",
+    "Q237": "Q237侯冠榕", "Q213": "Q213許皓森", "Q062": "Q062張昱政", "Q368": "Q368蔡宗翰",
+    "2651": "2651賈晉原", "2545": "2545陳靖蓉", "2486": "2486陳緯倫", "2694": "2694黃柏棣",
+    "2341": "2341謝舒筠", "1992": "1992邱凱斌", "1605": "1605謝侑叡", "1512": "1512林莞芹",
+    "1229": "1229黃逸群", "1305": "1305鄭郁雯", "1199": "1199曾子慈", "0985": "0985徐子哲",
+    "1059": "1059張捷宇", "0424": "0424呂侑穎", "0799": "0799黃昱彰", "8395": "8395顏琨麒",
+    "7977": "7977李廣祚", "7172": "7172沃宏達", "7123": "7123詹益欣", "5278": "5278巫龍昇",
+    "5240": "5240張伯丞", "5009": "5009吳家棟", "3436": "3436葉勇信", "3015": "3015王俊力",
+    "2867": "2867周宗川", "2633": "2633賀萬靖", "2233": "2233許隆安", "2195": "2195洪國竣",
+    "2089": "2089褚柏顯", "1816": "1816謝宜璋", "1760": "1760柯毓賢", "1449": "1449溫明賢"
+}
 
-def parse_csv_line(line):
-    if not line.strip(): return []
-    pattern = re.compile(r'([^,"]*|"[^"\\]*(?:\\.[^"\\]*)*")(?:,|$)')
-    matches = pattern.findall(line)
-    if matches and matches[-1] == '': matches.pop()
-    return [m.strip().strip('"').strip() for m in matches]
+def get_east_asian_width_length(text):
+    """計算中英文混合實際顯示寬度"""
+    length = 0
+    for char in text:
+        if ord(char) > 127:
+            length += 2
+        else:
+            length += 1
+    return length
+
+def pad_text(text, target_len):
+    """依實際顯示長度補空格"""
+    current_len = get_east_asian_width_length(text)
+    if current_len >= target_len:
+        return text
+    return text + " " * (target_len - current_len)
 
 def process_file_content(raw_text):
-    global final_output_text
-    lines = raw_text.replace('\r\n', '\n').replace('\r', '\n').split('\n')
-    col_widths = {"date": 10, "id": 12, "doc": 14, "bed": 8, "diag": 25}
+    lines = raw_text.splitlines()
+    output_lines = []
     
-    header = (
-        "預住院日".ljust(col_widths["date"]) + "病歷號".ljust(col_widths["id"]) +
-        "醫師".ljust(col_widths["doc"]) + "床等".ljust(col_widths["bed"]) + "診斷"
-    )
-    output_lines = [header]
-    current_last_week = None
-    valid_row_count = 0
-
+    # 建立表頭
+    header = f"{pad_text('預住日', 8)}{pad_text('病歷號', 12)}{pad_text('主治醫師', 16)}{pad_text('床等', 8)}主診斷碼 / 疾病名稱"
+    output_lines.append(header)
+    output_lines.append("-" * 80)
+    
+    last_week_num = None
+    
     for line in lines:
-        if not line.strip(): continue
-        parts = parse_csv_line(line)
-        if parts and ("病歷號" in parts[0] or "預住院日" in parts[0] or (len(parts) > 4 and "病歷號" in parts[4])):
+        if not line.strip():
             continue
-        if len(parts) < 12: continue
             
-        raw_date, patient_id, doc_code, bed_info, icd_code = parts[2], parts[4], parts[7], parts[8], parts[11]
+        parts = [p.strip() for p in line.split(',')]
+        if len(parts) <= 11:
+            continue
+            
+        raw_date = parts[2]     # 預住日
+        chart_no = parts[4]     # 病歷號
+        doc_code = parts[7]     # 醫師代碼
+        bed_type = parts[8]     # 床等
+        icd_code = parts[11]    # 診斷碼
 
-        # 1. 日期簡化與 ISO 週別判斷
-        formatted_date = ""
-        iso_week = None
+        # 1. 日期格式簡化與跨週判定
+        date_str = ""
         try:
-            dt = datetime.strptime(raw_date.split()[0], "%Y/%m/%d")
-            formatted_date = dt.strftime("%m/%d")
-            iso_week = dt.isocalendar()[1]
-        except Exception:
-            formatted_date = raw_date[:10] if len(raw_date) >= 10 else raw_date
-        
-        # 2. 跨週自動插入分隔線
-        if iso_week is not None:
-            if current_last_week is not None and iso_week != current_last_week:
-                output_lines.append("-" * 70)
-            current_last_week = iso_week
-
-        # 3. 醫師與疾病代碼轉換 (內含帶點與去點的雙重格式支援)
-        resolved_doc = DOCTOR_MAP.get(doc_code, doc_code)
-        
-        # 清理診斷碼字串，確保比對準確
-        clean_icd = icd_code.strip().upper()
-        resolved_diag = ICD_MAP.get(clean_icd, icd_code)
-
-        # 4. 欄位完美對齊組裝
-        row_str = (
-            formatted_date.ljust(col_widths["date"]) + patient_id.ljust(col_widths["id"]) +
-            resolved_doc.ljust(col_widths["doc"]) + bed_info.ljust(col_widths["bed"]) + resolved_diag
-        )
-        output_lines.append(row_str)
-        valid_row_count += 1
-
-    if valid_row_count == 0:
-        raise ValueError("無法成功解析任何資料列。請確認該文字檔中第3欄為日期、第5欄為病歷號、第8欄為醫師、第12欄為診斷碼。")
-
-    final_output_text = "\n".join(output_lines)
-    return final_output_text, valid_row_count
-
-@bind(window, "startTransform")
-def run_transform(evt):
-    file_list = document["fileInput"].files
-    if not file_list: return
-    
-    selected_file = file_list[0]
-    status_el = document["statusMessage"]
-    preview_el = document["previewArea"]
-    download_btn = document["downloadBtn"]
-    p_container = document["progressContainer"]
-    p_bar = document["progressBar"]
-    
-    p_container.style.display = "block"
-    p_bar.className = "progress-bar"
-    p_bar.style.width = "20%"
-    status_el.text = "正在載入本機端臨床文字檔案..."
-    
-    def step_2():
-        p_bar.style.width = "60%"
-        status_el.text = "分析醫令系統 CSV 欄位架構與代碼對照中..."
-        
-    def step_final():
-        reader_big5 = window.FileReader.new()
-        
-        def on_big5_success(e):
-            try:
-                raw_content = reader_big5.result
-                if "" in raw_content[:100]: raise UnicodeDecodeError("big5", b"", 0, 1, "轉用 UTF-8")
-                processed_text, count = process_file_content(raw_content)
-                render_success(processed_text, count, "Big5")
-            except Exception:
-                try_utf8()
-                
-        def try_utf8():
-            reader_utf8 = window.FileReader.new()
-            def on_utf8_success(e):
-                try:
-                    raw_content = reader_utf8.result
-                    processed_text, count = process_file_content(raw_content)
-                    render_success(processed_text, count, "UTF-8")
-                except Exception as ex:
-                    render_error(str(ex))
-            reader_utf8.bind("load", on_utf8_success)
-            reader_utf8.readAsText(selected_file, 'utf-8')
-
-        def render_success(text, count, encoding):
-            p_bar.style.width = "100%"
-            p_bar.classList.add("success")
-            preview_el.text = text
-            status_el.text = f"成功轉換 {count} 筆病人資料！({encoding})"
-            status_el.className = "status-msg status-success"
-            download_btn.removeAttribute("disabled")
+            dt = datetime.strptime(raw_date, "%Y/%m/%d %H:%M:%S")
+            date_str = f"{dt.month:02d}/{dt.day:02d}"
             
-        def render_error(err_msg):
-            p_bar.style.width = "100%"
-            p_bar.classList.add("error")
-            preview_el.text = f"[資料解析失敗提示]\n\n錯誤原因：{err_msg}\n\n請確認您的 .txt 檔案內是用「逗號 ,」分隔的 CSV 格式。"
-            status_el.text = "轉檔失敗"
-            status_el.className = "status-msg status-error"
+            current_week_num = dt.isocalendar()[1]
+            if last_week_num is not None and current_week_num != last_week_num:
+                output_lines.append("\n" + "="*24 + " 🗓️ 跨 週 排 程 分 隔 線 " + "="*24 + "\n")
+            
+            last_week_num = current_week_num
+        except Exception:
+            date_str = raw_date[:5] if len(raw_date) >= 5 else raw_date
 
-        reader_big5.bind("load", on_big5_success)
-        reader_big5.readAsText(selected_file, 'big5')
+        # 2. 轉換對照字典
+        doc_name = DOCTOR_MAP.get(doc_code, doc_code)
+        icd_name = ICD_MAP.get(icd_code, "Unknown Diagnosis")
+        
+        # 3. 欄位等寬排列 (主治醫師寬度加寬至 16)
+        col_date = pad_text(date_str, 8)
+        col_chart = pad_text(chart_no, 12)
+        col_doc = pad_text(doc_name, 16)
+        col_bed = pad_text(bed_type, 8)
+        col_icd = f"{icd_code} ({icd_name})"
+        
+        combined_line = f"{col_date}{col_chart}{col_doc}{col_bed}{col_icd}"
+        output_lines.append(combined_line)
+        
+    return "\n".join(output_lines)
 
-    timer.set_timeout(step_2, 200)
-    timer.set_timeout(step_final, 500)
+def python_run_transform(raw_text):
+    try:
+        final_result = process_file_content(raw_text)
+        
+        # 預覽前 15 行
+        preview_lines = final_result.splitlines()[:15]
+        window.document.getElementById("previewBox").innerText = "\n".join(preview_lines) + "\n\n... (其餘部分已成功導出至下載檔案) ..."
+        window.document.getElementById("preview-section").style.display = "block"
+        
+        # 自動下載全新排版後的 .txt
+        blob = window.Blob.new([final_result], {"type": "text/plain;charset=utf-8"})
+        link = window.document.createElement("a")
+        link.href = window.URL.createObjectURL(blob)
+        link.download = f"formatted_patients_{datetime.now().strftime('%m%d_%H%M')}.txt"
+        link.click()
+        
+    except Exception as e:
+        window.alert(f"處理檔案時發生錯誤：{str(e)}")
 
-@bind(document["downloadBtn"], "click")
-def trigger_download(evt):
-    global final_output_text
-    if not final_output_text: return
-    blob = window.Blob.new([final_output_text], {"type": "text/plain;charset=utf-8"})
-    a = document.createElement("a")
-    a.href = window.URL.createObjectURL(blob)
-    a.download = f"格式化交班清單_{datetime.now().strftime('%m%d_%H%M')}.txt"
-    a.click()
+window.pythonRunTransform = python_run_transform
+window.onPythonReady()
 </script>
 
 </body>
