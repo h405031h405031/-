@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>住院/佔床名單格式化工具 (JS 穩定版)</title>
+    <title>住院/佔床名單格式化工具 (JS 補全穩定版)</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -113,7 +113,7 @@
 </div>
 
 <script>
-    // 🧬 疾病代碼對照表
+    // 🧬 疾病代碼對照表 (已針對 20260628.txt 補齊缺漏代碼)
     const ICD_MAP = {
         "I480": "Paroxysmal Af", "I48.0": "Paroxysmal Af",
         "I4819": "Persistent Af", "I48.19": "Persistent Af",
@@ -131,7 +131,12 @@
         "I441": "2nd-degree AVB", "I44.1": "2nd-degree AVB",
         "Z950": "Pacemaker status", "Z95.0": "Pacemaker status",
         "I498": "Other arrhythmia", "I49.8": "Other arrhythmia",
-        "I340": "MR", "I34.0": "MR"
+        "I340": "MR", "I34.0": "MR",
+        // 以下為本次自 20260628.txt 額外補全之代碼
+        "R001": "Bradycardia", "R00.1": "Bradycardia",
+        "I5022": "Chronic systolic HF", "I50.22": "Chronic systolic HF",
+        "I25750": "Unstable angina (post-Tx)", "I25.750": "Unstable angina (post-Tx)",
+        "I4820": "Chronic Af", "I48.20": "Chronic Af"
     };
 
     // 🩺 醫事人員對照表 (格式：代碼+姓名)
@@ -148,35 +153,24 @@
         "2089": "2089褚柏顯", "1816": "1816謝宜璋", "1760": "1760柯毓賢", "1449": "1449溫明賢"
     };
 
-    let rawFileContent = "";
-
-    // 計算中英文顯示長度 (中文字算 2，英數算 1)
     function getDisplayLength(str) {
         let len = 0;
         for (let i = 0; i < str.length; i++) {
-            if (str.charCodeAt(i) > 127) {
-                len += 2;
-            } else {
-                len += 1;
-            }
+            if (str.charCodeAt(i) > 127) { len += 2; } else { len += 1; }
         }
         return len;
     }
 
-    // 依長度補齊空格
     function padText(str, targetLen) {
         let currentLen = getDisplayLength(str);
         if (currentLen >= targetLen) return str;
         return str + " ".repeat(targetLen - currentLen);
     }
 
-    // 取得日期的 ISO 週別 (對應 Python 的 dt.isocalendar()[1])
     function getISOWeek(dateString) {
-        // 解析格式 "2026/06/27 17:09:22"
         const normalized = dateString.replace(/\//g, '-');
         const target = new Date(normalized);
         if (isNaN(target.getTime())) return null;
-        
         const dayNr = (target.getDay() + 6) % 7;
         target.setDate(target.getDate() - dayNr + 3);
         const firstThursday = target.valueOf();
@@ -187,30 +181,23 @@
         return 1 + Math.ceil((firstThursday - target) / 604800000);
     }
 
-    // 監聽選取檔案
     document.getElementById("fileInput").addEventListener("change", function(e) {
         const file = e.target.files[0];
         if (!file) return;
-        
         document.getElementById("file-name-display").innerText = file.name;
-        
         const reader = new FileReader();
         reader.onload = function(evt) {
             rawFileContent = evt.target.result;
             document.getElementById("transformBtn").disabled = false;
         };
-        reader.readAsText(file, "UTF-8"); // 視醫院系統導出編碼可調整為 "BIG5"
+        reader.readAsText(file, "UTF-8");
     });
 
-    // 點擊轉換按鈕
     document.getElementById("transformBtn").addEventListener("click", function() {
         if (!rawFileContent) return;
-        
         try {
             const lines = rawFileContent.split(/\r?\n/);
             const outputLines = [];
-            
-            // 建立標頭
             const header = `${padText('預住日', 8)}${padText('病歷號', 12)}${padText('主治醫師', 16)}${padText('床等', 8)}主診斷碼 / 疾病名稱`;
             outputLines.push(header);
             outputLines.push("-".repeat(80));
@@ -219,46 +206,34 @@
             
             for (let line of lines) {
                 if (!line.trim()) continue;
-                
                 const parts = line.split(',').map(p => p.trim());
                 if (parts.length <= 11) continue;
                 
-                const rawDate = parts[2];     // parts[2]
-                const chartNo = parts[4];     // parts[4]
-                const docCode = parts[7];     // parts[7]
-                const bedType = parts[8];     // parts[8]
-                const icdCode = parts[11] || "";    // parts[11]
+                const rawDate = parts[2];     
+                const chartNo = parts[4];     
+                const docCode = parts[7];     
+                const bedType = parts[8];     
+                const icdCode = parts[11] || "";    
 
-                // 1. 日期處理與跨週判斷
                 let dateStr = "";
                 let currentWeekNum = null;
-                
                 if (rawDate.includes("/")) {
                     const match = rawDate.match(/(\d{4})\/(\d{2})\/(\d{2})/);
                     if (match) {
-                        dateStr = `${match[2]}/${match[3]}`; // MM/DD
+                        dateStr = `${match[2]}/${match[3]}`; 
                         currentWeekNum = getISOWeek(rawDate);
                     }
                 }
-                
-                if (!dateStr) {
-                    dateStr = rawDate.substring(0, 5);
-                }
+                if (!dateStr) { dateStr = rawDate.substring(0, 5); }
 
-                // 跨週觸發分隔線
                 if (lastWeekNum !== null && currentWeekNum !== null && currentWeekNum !== lastWeekNum) {
                     outputLines.push("\n" + "=".repeat(24) + " 🗓️ 跨 週 排 程 分 隔 線 " + "=".repeat(24) + "\n");
                 }
-                
-                if (currentWeekNum !== null) {
-                    lastWeekNum = currentWeekNum;
-                }
+                if (currentWeekNum !== null) { lastWeekNum = currentWeekNum; }
 
-                // 2. 轉換對照字典
                 const docName = DOCTOR_MAP[docCode] || docCode;
                 const icdName = ICD_MAP[icdCode] || "Unknown Diagnosis";
                 
-                // 3. 欄位等寬拼接
                 const colDate = padText(dateStr, 8);
                 const colChart = padText(chartNo, 12);
                 const colDoc = padText(docName, 16);
@@ -269,16 +244,12 @@
             }
             
             const finalResult = outputLines.join("\n");
-            
-            // 4. 更新前端網頁預覽
             const previewLines = finalResult.split("\n").slice(0, 15).join("\n");
             document.getElementById("previewBox").innerText = previewLines + "\n\n... (其餘部分已成功導出至下載檔案) ...";
             document.getElementById("preview-section").style.display = "block";
             
-            // 5. 自動觸發全新 .txt 下載
             const blob = new Blob([finalResult], { type: "text/plain;charset=utf-8" });
             const link = document.createElement("a");
-            
             const now = new Date();
             const dateStamp = `${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}`;
             
