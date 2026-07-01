@@ -39,7 +39,7 @@
             align-items: center;
             flex-wrap: wrap;
         }
-        /* 基礎按鈕樣式 */
+        /* 按鈕樣式 */
         .btn {
             color: white;
             border: none;
@@ -50,22 +50,22 @@
             transition: background 0.2s;
             font-weight: bold;
         }
-        /* 綠色執行按鈕，啟用與滑過狀態 */
+        /* 綠色執行按鈕 */
         #runBtn { background-color: #38a169; }
         #runBtn:hover:not(:disabled) { background-color: #2f855a; }
         
-        /* 藍色下載按鈕，啟用與滑過狀態 */
+        /* 藍色下載按鈕 */
         #downloadBtn { background-color: #3182ce; }
         #downloadBtn:hover:not(:disabled) { background-color: #2b6cb0; }
         
-        /* 禁用狀態：不管是哪種按鈕，只要 disabled 就變灰色 */
+        /* 禁用狀態強制變灰 */
         .btn:disabled { 
             background-color: #cbd5e0 !important; 
             color: #718096 !important;
             cursor: not-allowed !important; 
         }
         
-        /* 進度條容器外框 */
+        /* 進度條樣式 */
         .progress-container {
             width: 100%;
             background-color: #e2e8f0;
@@ -76,7 +76,6 @@
             height: 8px;
             overflow: hidden;
         }
-        /* 進度條內部動態條 */
         .progress-bar {
             height: 100%;
             width: 0%;
@@ -115,7 +114,7 @@
 
     <div class="control-panel">
         <input type="file" id="fileInput" accept=".txt,.csv" />
-        <button class="btn" id="runBtn" disabled>▶ 開始執行轉檔</button>
+        <button class="btn" id="runBtn" disabled onclick="triggerPythonRun()">▶ 開始執行轉檔</button>
         <button class="btn" id="downloadBtn" disabled>📥 下載轉檔後的 .txt</button>
         <span id="statusMessage" class="status-msg"></span>
     </div>
@@ -128,84 +127,85 @@
     <textarea id="previewArea" readonly placeholder="請先上傳原始預住院清單檔案，並點擊「開始執行轉檔」..."></textarea>
 </div>
 
+<script type="text/javascript">
+    const fileInput = document.getElementById('fileInput');
+    const runBtn = document.getElementById('runBtn');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const statusMessage = document.getElementById('statusMessage');
+    const previewArea = document.getElementById('previewArea');
+    const progressContainer = document.getElementById('progressContainer');
+    const progressBar = document.getElementById('progressBar');
+
+    // 當使用者「選擇檔案」時，100% 用原生的 JS 點亮綠色執行按鈕
+    fileInput.addEventListener('change', function() {
+        progressContainer.style.display = "none";
+        progressBar.style.width = "0%";
+        progressBar.className = "progress-bar";
+        previewArea.value = "";
+
+        if (fileInput.files.length > 0) {
+            runBtn.removeAttribute('disabled'); // 點亮綠色按鈕
+            downloadBtn.setAttribute('disabled', 'disabled');
+            statusMessage.textContent = `已選取：${fileInput.files[0].name}，請點擊轉檔。`;
+            statusMessage.className = "status-msg status-info";
+        } else {
+            runBtn.setAttribute('disabled', 'disabled');
+        }
+    });
+
+    // 觸發自定義的 Python 轉檔事件
+    function triggerPythonRun() {
+        const event = new CustomEvent('startTransform');
+        window.dispatchEvent(event);
+    }
+</script>
+
 <script type="text/python">
 import re
 from browser import document, window, bind, timer
 from datetime import datetime
 
-# 1. 醫事人員對照字典
-DOCTOR_MAP = {
-    "2867": "2867周宗川"
-}
+DOCTOR_MAP = { "2867": "2867周宗川" }
 
-# 2. ICD-10 診斷碼對照字典
 ICD_MAP = {
-    "I480": "Paroxysmal Af",
-    "I4819": "Persistent Af",
-    "I471": "SVT",
-    "I495": "SSS",
-    "I442": "CAVB",
-    "I483": "AFL",
-    "I470": "VT",
-    "I4891": "Af",
-    "I4811": "Chronic Af",
-    "I209": "CAD/Angina",
-    "R002": "Abnormal heart-beat",
-    "I509": "Heart Failure",
-    "R079": "Chest Pain",
-    "I441": "2nd-degree AVB",
-    "Z950": "Pacemaker status",
-    "I498": "Other arrhythmia",
+    "I480": "Paroxysmal Af", "I4819": "Persistent Af", "I471": "SVT",
+    "I495": "SSS", "I442": "CAVB", "I483": "AFL", "I470": "VT",
+    "I4891": "Af", "I4811": "Chronic Af", "I209": "CAD/Angina",
+    "R002": "Abnormal heart-beat", "I509": "Heart Failure", "R079": "Chest Pain",
+    "I441": "2nd-degree AVB", "Z950": "Pacemaker status", "I498": "Other arrhythmia",
     "I340": "MR"
 }
 
-selected_file = None
 final_output_text = ""
 
 def parse_csv_line(line):
-    if not line.strip():
-        return []
+    if not line.strip(): return []
     pattern = re.compile(r'([^,"]*|"[^"\\]*(?:\\.[^"\\]*)*")(?:,|$)')
     matches = pattern.findall(line)
-    if matches and matches[-1] == '':
-        matches.pop()
+    if matches and matches[-1] == '': matches.pop()
     return [m.strip().strip('"').strip() for m in matches]
 
 def process_file_content(raw_text):
     global final_output_text
-    
     lines = raw_text.replace('\r\n', '\n').replace('\r', '\n').split('\n')
     col_widths = {"date": 10, "id": 12, "doc": 14, "bed": 8, "diag": 25}
     
     header = (
-        "預住院日".ljust(col_widths["date"]) +
-        "病歷號".ljust(col_widths["id"]) +
-        "醫師".ljust(col_widths["doc"]) +
-        "床等".ljust(col_widths["bed"]) +
-        "診斷"
+        "預住院日".ljust(col_widths["date"]) + "病歷號".ljust(col_widths["id"]) +
+        "醫師".ljust(col_widths["doc"]) + "床等".ljust(col_widths["bed"]) + "診斷"
     )
-    
     output_lines = [header]
     current_last_week = None
     valid_row_count = 0
 
     for line in lines:
-        if not line.strip():
-            continue
-            
+        if not line.strip(): continue
         parts = parse_csv_line(line)
-        
         if parts and ("病歷號" in parts[0] or "預住院日" in parts[0] or (len(parts) > 4 and "病歷號" in parts[4])):
             continue
+        if len(parts) < 12: continue
             
-        if len(parts) < 12:
-            continue
-            
-        raw_date = parts[2]
-        patient_id = parts[4]
-        doc_code = parts[7]
-        bed_info = parts[8]
-        icd_code = parts[11]
+        raw_date, patient_id, doc_code, bed_info, icd_code = parts[2], parts[4], parts[7], parts[8], parts[11]
 
         # 1. 日期簡化
         formatted_date = ""
@@ -223,61 +223,29 @@ def process_file_content(raw_text):
                 output_lines.append("-" * 70)
             current_last_week = iso_week
 
-        # 3. 對照代碼
         resolved_doc = DOCTOR_MAP.get(doc_code, doc_code)
         resolved_diag = ICD_MAP.get(icd_code, icd_code)
 
-        # 4. 對齊組裝
         row_str = (
-            formatted_date.ljust(col_widths["date"]) +
-            patient_id.ljust(col_widths["id"]) +
-            resolved_doc.ljust(col_widths["doc"]) +
-            bed_info.ljust(col_widths["bed"]) +
-            resolved_diag
+            formatted_date.ljust(col_widths["date"]) + patient_id.ljust(col_widths["id"]) +
+            resolved_doc.ljust(col_widths["doc"]) + bed_info.ljust(col_widths["bed"]) + resolved_diag
         )
         output_lines.append(row_str)
         valid_row_count += 1
 
     if valid_row_count == 0:
-        raise ValueError("無法成功解析任何資料列。請確認該 .txt 檔中，第3欄為日期、第5欄為病歷號、第8欄為醫師、第12欄為診斷碼。")
+        raise ValueError("無法成功解析任何資料列。請確認該文字檔中第3欄為日期、第5欄為病歷號、第8欄為醫師、第12欄為診斷碼。")
 
     final_output_text = "\n".join(output_lines)
     return final_output_text, valid_row_count
 
-@bind(document["fileInput"], "change")
-def handle_file_select(evt):
-    global selected_file
-    file_list = evt.target.files
-    status_el = document["statusMessage"]
-    run_btn = document["runBtn"]
-    download_btn = document["downloadBtn"]
-    preview_el = document["previewArea"]
+# 監聽來自網頁 JS 按鈕點擊發送的事件
+@bind(window, "startTransform")
+def run_transform(evt):
+    file_list = document["fileInput"].files
+    if not file_list: return
     
-    document["progressContainer"].style.display = "none"
-    document["progressBar"].style.width = "0%"
-    document["progressBar"].className = "progress-bar"
-    
-    if not file_list:
-        selected_file = None
-        run_btn.removeAttribute("disabled") # 防錯：如果沒檔案就強制上鎖
-        run_btn.setAttribute("disabled", "disabled")
-        return
-        
     selected_file = file_list[0]
-    status_el.text = f"已選取：{selected_file.name}，請點擊下方按鈕開始轉檔。"
-    status_el.className = "status-msg status-info"
-    preview_el.text = ""
-    
-    # 關鍵修正：改用標準 DOM 方法移除 disabled 屬性，確保按鈕能百分之百亮起
-    run_btn.removeAttribute("disabled")
-    download_btn.setAttribute("disabled", "disabled")
-
-@bind(document["runBtn"], "click")
-def handle_run_click(evt):
-    global selected_file
-    if not selected_file:
-        return
-        
     status_el = document["statusMessage"]
     preview_el = document["previewArea"]
     download_btn = document["downloadBtn"]
@@ -286,18 +254,12 @@ def handle_run_click(evt):
     
     p_container.style.display = "block"
     p_bar.className = "progress-bar"
-    p_bar.style.width = "15%"
+    p_bar.style.width = "20%"
     status_el.text = "正在載入本機端臨床文字檔案..."
-    status_el.className = "status-msg"
-    preview_el.text = ""
     
     def step_2():
-        p_bar.style.width = "45%"
-        status_el.text = "分析醫令系統 CSV 欄位架構中..."
-        
-    def step_3():
-        p_bar.style.width = "80%"
-        status_el.text = "進行醫師代碼與 ICD-10 診斷名稱對照修復..."
+        p_bar.style.width = "60%"
+        status_el.text = "分析醫令系統 CSV 欄位架構與代碼對照中..."
         
     def step_final():
         reader_big5 = window.FileReader.new()
@@ -305,17 +267,12 @@ def handle_run_click(evt):
         def on_big5_success(e):
             try:
                 raw_content = reader_big5.result
-                if "" in raw_content[:100]:
-                    raise UnicodeDecodeError("big5", b"", 0, 1, "轉用 UTF-8")
-                    
+                if "" in raw_content[:100]: raise UnicodeDecodeError("big5", b"", 0, 1, "轉用 UTF-8")
                 processed_text, count = process_file_content(raw_content)
                 render_success(processed_text, count, "Big5")
-            except Exception as ex:
+            except Exception:
                 try_utf8()
                 
-        def on_big5_error(e):
-            try_utf8()
-
         def try_utf8():
             reader_utf8 = window.FileReader.new()
             def on_utf8_success(e):
@@ -334,29 +291,25 @@ def handle_run_click(evt):
             preview_el.text = text
             status_el.text = f"成功轉換 {count} 筆病人資料！({encoding})"
             status_el.className = "status-msg status-success"
-            download_btn.removeAttribute("disabled") # 啟用下載鈕
+            download_btn.removeAttribute("disabled")
             
         def render_error(err_msg):
             p_bar.style.width = "100%"
             p_bar.classList.add("error")
-            preview_el.text = f"[資料解析失敗提示]\n\n錯誤原因：{err_msg}\n\n請檢查上傳的文字檔格式與欄位對照順序是否相符。"
+            preview_el.text = f"[資料解析失敗提示]\n\n錯誤原因：{err_msg}\n\n請確認您的 .txt 檔案內是用「逗號 ,」分隔的 CSV 格式。"
             status_el.text = "轉檔失敗"
             status_el.className = "status-msg status-error"
-            download_btn.setAttribute("disabled", "disabled")
 
         reader_big5.bind("load", on_big5_success)
-        reader_big5.bind("error", on_big5_error)
         reader_big5.readAsText(selected_file, 'big5')
 
-    timer.set_timeout(step_2, 250)
-    timer.set_timeout(step_3, 550)
-    timer.set_timeout(step_final, 850)
+    timer.set_timeout(step_2, 200)
+    timer.set_timeout(step_final, 500)
 
 @bind(document["downloadBtn"], "click")
 def trigger_download(evt):
     global final_output_text
-    if not final_output_text:
-        return
+    if not final_output_text: return
     blob = window.Blob.new([final_output_text], {"type": "text/plain;charset=utf-8"})
     a = document.createElement("a")
     a.href = window.URL.createObjectURL(blob)
